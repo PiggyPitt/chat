@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+coverage/
+.DS_Store
+.claude/
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# Windows
+Thumbs.db
