@@ -2,6 +2,8 @@ import readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { ChatSocketClient } from './socket-client.js';
 import { cliConfig } from './cli-config.js';
+import { checkAndUpdate } from './updater.js';
+import { VERSION } from '../../version.js';
 
 function formatDate(value: string | Date): string {
   const d = new Date(value);
@@ -48,7 +50,7 @@ async function main(): Promise<void> {
 
   console.log('');
   console.log('  ┌─────────────────────────────┐');
-  console.log('  │   Terminal Chat  v1.0.0     │');
+  console.log(`  │   Terminal Chat  v${VERSION.padEnd(9)}│`);
   console.log(`  │   ${cliConfig.serverUrl.replace('https://', '')}   │`);
   console.log('  └─────────────────────────────┘');
   console.log('');
@@ -304,8 +306,10 @@ function printHelp(): void {
   console.log('');
 }
 
-main().catch((error) => {
-  console.error('Fatal error:', (error as Error).message);
-  process.stdin.pause();
-  setTimeout(() => process.exit(1), 3000);
-});
+checkAndUpdate()
+  .then(() => main())
+  .catch((error) => {
+    console.error('Fatal error:', (error as Error).message);
+    process.stdin.pause();
+    setTimeout(() => process.exit(1), 3000);
+  });

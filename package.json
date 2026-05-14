@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "build:cli": "npm run build && pkg dist/presentation/cli/index.js --targets node22-win-x64 --output dist/chat-cli.exe",
+    "build:cli": "node scripts/build-cli.mjs",
     "dev:server": "tsx src/presentation/server/server.ts",
     "dev:cli": "tsx src/presentation/cli/index.ts",
     "start:server": "node dist/presentation/server/server.js",
