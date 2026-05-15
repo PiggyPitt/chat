@@ -175,6 +175,7 @@ async function startSession(
   while (true) {
     const command = (await rl.question('> ')).trim();
     clearInputLine();
+
     if (!command) continue;
 
     try {
@@ -310,7 +311,7 @@ async function handleCommand(
       console.log('  Reading clipboard...');
       const result = await captureAndUploadClipboard(cliConfig.serverUrl, token);
       if (!result) {
-        console.log('  No image found in clipboard. Use Win+Shift+S then Ctrl+V to capture.');
+        console.log('  No image found in clipboard.');
         return false;
       }
       await client.sendImage(currentRoomId, result.publicUrl);
@@ -360,8 +361,8 @@ function printHelp(): void {
   console.log('  join   <name> [-p <password>]   Join a room');
   console.log('  <message>                       Send a message (when in room)');
   console.log('  /upload <path>                  Upload and send an image file');
-  console.log('  /paste-image                    Upload image from clipboard');
-  console.log('  <drag image here>               Drag & drop image into terminal');
+  console.log('  /paste-image                    Win+Shift+S then type this to send');
+  console.log('  <drag or paste image path>      Drag & drop image file into terminal');
   console.log('  users                           List online users');
   console.log('  leave  <name>                   Leave a room');
   console.log('  exit                            Quit');

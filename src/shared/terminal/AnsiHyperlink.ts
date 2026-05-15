@@ -8,11 +8,12 @@ export class AnsiHyperlink {
   static render(url: string, label: string): string {
     const { valid, reason } = UrlValidator.validate(url);
     if (!valid) return `${label} [blocked: ${reason}]`;
-    if (AnsiHyperlink.supportsOsc8()) {
-      return `${OSC}8;;${url}${ST}${label}${OSC}8;;${ST}`;
+
+    if (AnsiHyperlink.hyperlinksDisabled()) {
+      return `${label} (${url})`;
     }
-    // fallback: show label + URL for terminals without OSC 8
-    return `${label} (${url})`;
+
+    return `${OSC}8;;${url}${ST}${label}${OSC}8;;${ST}`;
   }
 
   static imageLink(url: string): string {
@@ -28,12 +29,8 @@ export class AnsiHyperlink {
     return text.replace(/https?:\/\/[^\s<>"]+/g, (url) => AnsiHyperlink.render(url, url));
   }
 
-  private static supportsOsc8(): boolean {
-    return (
-      process.env['WT_SESSION'] !== undefined ||
-      process.env['TERM_PROGRAM'] === 'WezTerm' ||
-      process.env['TERM_PROGRAM'] === 'iTerm.app' ||
-      process.env['VTE_VERSION'] !== undefined
-    );
+  // opt-out via env var for terminals that don't support OSC 8
+  private static hyperlinksDisabled(): boolean {
+    return process.env['CHAT_NO_HYPERLINKS'] === '1';
   }
 }

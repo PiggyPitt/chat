@@ -15,19 +15,41 @@ export interface UploadResult {
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i;
 
-// Detect if the terminal input is a file path dragged into the terminal.
-// Windows Terminal pastes the path as plain text when a file is dragged in.
+// Read image from clipboard (Windows only) and upload.
+// User must explicitly call this via /paste-image to ensure intent.
+export async function captureAndUploadClipboard(serverUrl: string, token: string): Promise<UploadResult | null> {
+  if (process.platform !== 'win32') return null;
+
+  const tempPath = join(tmpdir(), `${randomUUID()}.png`);
+  const script = [
+    'Add-Type -AssemblyName System.Windows.Forms',
+    '$img = [System.Windows.Forms.Clipboard]::GetImage()',
+    'if ($img -eq $null) { exit 1 }',
+    `$img.Save('${tempPath}', [System.Drawing.Imaging.ImageFormat]::Png)`,
+    'exit 0'
+  ].join('; ');
+
+  try {
+    await execFileAsync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 6000 });
+    const buffer = await readFile(tempPath);
+    return uploadBuffer(buffer, 'clipboard.png', serverUrl, token);
+  } catch {
+    return null;
+  } finally {
+    await unlink(tempPath).catch(() => {});
+  }
+}
+
+// Detect if the terminal input is a file path dropped or pasted into the terminal.
+// Works for both drag & drop and right-click paste after Win+Shift+S.
 export function detectDragDropPath(input: string): string | null {
-  // strip surrounding quotes Windows sometimes adds
   const cleaned = input.replace(/^["']|["']$/g, '').trim();
-  // must be an absolute path (Windows or Unix)
   if (!/^([A-Za-z]:[\\\/]|\/)/.test(cleaned)) return null;
   if (!IMAGE_EXT.test(cleaned)) return null;
   if (!existsSync(cleaned)) return null;
   return cleaned;
 }
 
-// Upload a file at the given path to the server
 export async function uploadImageFile(filePath: string, serverUrl: string, token: string): Promise<UploadResult> {
   const cleaned = filePath.replace(/^["']|["']$/g, '').trim();
   if (!IMAGE_EXT.test(cleaned)) throw new Error('Not a supported image file (png, jpg, gif, webp)');
@@ -38,36 +60,21 @@ export async function uploadImageFile(filePath: string, serverUrl: string, token
   return uploadBuffer(buffer, filename, serverUrl, token);
 }
 
-// Read image from clipboard (Windows only via PowerShell + WinForms) and upload
-export async function captureAndUploadClipboard(serverUrl: string, token: string): Promise<UploadResult | null> {
-  if (process.platform !== 'win32') return null;
-
-  const tempPath = join(tmpdir(), `${randomUUID()}.png`);
-  // single-quoted args passed to execFile as array — no shell injection possible
-  const script = [
-    'Add-Type -AssemblyName System.Windows.Forms',
-    '$img = [System.Windows.Forms.Clipboard]::GetImage()',
-    'if ($img -eq $null) { exit 1 }',
-    `$img.Save('${tempPath}', [System.Drawing.Imaging.ImageFormat]::Png)`,
-    'exit 0'
-  ].join('; ');
-
-  try {
-    await execFileAsync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], {
-      timeout: 6000
-    });
-    const buffer = await readFile(tempPath);
-    return uploadBuffer(buffer, 'clipboard.png', serverUrl, token);
-  } catch {
-    return null;
-  } finally {
-    await unlink(tempPath).catch(() => {});
-  }
+function mimeFromFilename(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  const map: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp'
+  };
+  return map[ext] ?? 'application/octet-stream';
 }
 
 async function uploadBuffer(buffer: Buffer, filename: string, serverUrl: string, token: string): Promise<UploadResult> {
   const form = new FormData();
-  form.append('image', new Blob([new Uint8Array(buffer)]), filename);
+  form.append('image', new Blob([new Uint8Array(buffer)], { type: mimeFromFilename(filename) }), filename);
 
   const res = await fetch(`${serverUrl}/api/upload`, {
     method: 'POST',
