@@ -93,7 +93,7 @@ async function main(): Promise<void> {
         const password = await rl.question('  Password: ');
         clearInputLine();
         await requestJson<{ userId: string; username: string }>('auth/register', { username, password });
-        console.log('\n  Registered! Please login.\n');
+        console.log('\n  Registered! Your account is pending admin approval.\n');
       } catch (error) {
         console.error(`\n  Error: ${(error as Error).message}\n`);
       }
@@ -106,7 +106,7 @@ async function main(): Promise<void> {
         clearInputLine();
         const password = await rl.question('  Password: ');
         clearInputLine();
-        const result = await requestJson<{ token: string; userId: string; username: string }>('auth/login', { username, password });
+        const result = await requestJson<{ token: string; userId: string; username: string; role: string }>('auth/login', { username, password });
         console.log(`\n  Welcome, ${result.username}!\n`);
         await startSession(result, rl);
         return;
@@ -121,7 +121,7 @@ async function main(): Promise<void> {
 }
 
 async function startSession(
-  auth: { token: string; userId: string; username: string },
+  auth: { token: string; userId: string; username: string; role: string },
   rl: readline.Interface
 ): Promise<void> {
   const client = new ChatSocketClient(auth.token);
@@ -170,7 +170,7 @@ async function startSession(
     process.stdout.write(`\r\x1b[K  ${payload.username} left the room\n> `);
   });
 
-  printHelp();
+  printHelp(auth.role);
 
   while (true) {
     const command = (await rl.question('> ')).trim();
@@ -180,7 +180,7 @@ async function startSession(
 
     try {
       const done = await handleCommand(
-        command, auth.token, client, currentRoomId,
+        command, auth.token, auth.role, client, currentRoomId,
         (id, name, password) => {
           currentRoomId = id;
           currentRoomName = name;
@@ -201,6 +201,7 @@ async function startSession(
 async function handleCommand(
   command: string,
   token: string,
+  role: string,
   client: ChatSocketClient,
   currentRoomId: string | null,
   setRoom: (id: string | null, name: string | null, password?: string) => void
@@ -333,8 +334,57 @@ async function handleCommand(
       return false;
     }
 
+    case '/requestedregister': {
+      if (role !== 'admin') {
+        console.log('  Unknown command. Type help for commands.');
+        return false;
+      }
+      const data = await requestGet<{ users: { id: string; username: string; createdAt: string }[] }>('admin/pending', token);
+      console.log('');
+      if (data.users.length === 0) {
+        console.log('  No pending registrations.');
+      } else {
+        console.log('  Pending registrations:');
+        data.users.forEach((u, i) => {
+          console.log(`  ${i + 1}. ${u.username}  (id: ${u.id})  registered: ${formatDate(u.createdAt)}`);
+        });
+      }
+      console.log('');
+      return false;
+    }
+
+    case '/approve': {
+      if (role !== 'admin') {
+        console.log('  Unknown command. Type help for commands.');
+        return false;
+      }
+      const target = args.join(' ').trim();
+      if (!target) {
+        console.log('  Usage: /approve <username or userId>');
+        return false;
+      }
+      await requestJson(`admin/approve/${encodeURIComponent(target)}`, {}, token);
+      console.log(`  Approved: ${target}`);
+      return false;
+    }
+
+    case '/reject': {
+      if (role !== 'admin') {
+        console.log('  Unknown command. Type help for commands.');
+        return false;
+      }
+      const target = args.join(' ').trim();
+      if (!target) {
+        console.log('  Usage: /reject <username or userId>');
+        return false;
+      }
+      await requestJson(`admin/reject/${encodeURIComponent(target)}`, {}, token);
+      console.log(`  Rejected: ${target}`);
+      return false;
+    }
+
     case 'help':
-      printHelp();
+      printHelp(role);
       return false;
 
     case 'exit':
@@ -352,7 +402,7 @@ async function handleCommand(
   }
 }
 
-function printHelp(): void {
+function printHelp(role: string): void {
   console.log('');
   console.log('  Command                         Description');
   console.log('  ──────────────────────────────────────────────────────────');
@@ -365,6 +415,12 @@ function printHelp(): void {
   console.log('  <drag or paste image path>      Drag & drop image file into terminal');
   console.log('  users                           List online users');
   console.log('  leave  <name>                   Leave a room');
+  if (role === 'admin') {
+    console.log('  ──────────────────────────────────────────────────────────');
+    console.log('  /requestedregister              List pending registrations');
+    console.log('  /approve <username or userId>   Approve a pending user');
+    console.log('  /reject  <username or userId>   Reject a pending user');
+  }
   console.log('  exit                            Quit');
   console.log('  ──────────────────────────────────────────────────────────');
   console.log('');

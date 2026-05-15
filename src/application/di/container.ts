@@ -15,6 +15,9 @@ import { LeaveRoomUseCase } from '../usecases/room/LeaveRoomUseCase.js';
 import { ListRoomsUseCase } from '../usecases/room/ListRoomsUseCase.js';
 import { SendMessageUseCase } from '../usecases/message/SendMessageUseCase.js';
 import { GetRoomHistoryUseCase } from '../usecases/message/GetRoomHistoryUseCase.js';
+import { ListPendingUsersUseCase } from '../usecases/admin/ListPendingUsersUseCase.js';
+import { ApproveUserUseCase } from '../usecases/admin/ApproveUserUseCase.js';
+import { RejectUserUseCase } from '../usecases/admin/RejectUserUseCase.js';
 
 export class Container {
   public readonly authService: AuthService;
@@ -28,6 +31,9 @@ export class Container {
   public readonly listRoomsUseCase: ListRoomsUseCase;
   public readonly sendMessageUseCase: SendMessageUseCase;
   public readonly getRoomHistoryUseCase: GetRoomHistoryUseCase;
+  public readonly listPendingUsersUseCase: ListPendingUsersUseCase;
+  public readonly approveUserUseCase: ApproveUserUseCase;
+  public readonly rejectUserUseCase: RejectUserUseCase;
 
   constructor() {
     const userRepository = new MongoUserRepository();
@@ -49,5 +55,8 @@ export class Container {
     this.leaveRoomUseCase = new LeaveRoomUseCase(this.roomService);
     this.sendMessageUseCase = new SendMessageUseCase(this.messageService);
     this.getRoomHistoryUseCase = new GetRoomHistoryUseCase(this.messageService);
+    this.listPendingUsersUseCase = new ListPendingUsersUseCase(userRepository);
+    this.approveUserUseCase = new ApproveUserUseCase(userRepository);
+    this.rejectUserUseCase = new RejectUserUseCase(userRepository);
   }
 }

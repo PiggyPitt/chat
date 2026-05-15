@@ -6,9 +6,11 @@ import { resolve } from 'node:path';
 import { createAuthRouter } from './routes/auth.routes.js';
 import { createRoomRouter } from './routes/room.routes.js';
 import { createUploadRouter } from './routes/upload.routes.js';
+import { createAdminRouter } from './routes/admin.routes.js';
 import { AuthController } from './controllers/AuthController.js';
 import { RoomController } from './controllers/RoomController.js';
 import { UploadController } from './controllers/UploadController.js';
+import { AdminController } from './controllers/AdminController.js';
 import { AuthMiddleware } from './middlewares/auth.middleware.js';
 import { errorMiddleware } from './middlewares/error.middleware.js';
 import { UploadImageUseCase } from '../../application/usecases/image/UploadImageUseCase.js';
@@ -22,6 +24,7 @@ export function createApp(): express.Express {
   const roomController = new RoomController(container.listRoomsUseCase, container.createRoomUseCase, container.joinRoomUseCase, container.leaveRoomUseCase);
   const authMiddleware = new AuthMiddleware(container.authService);
   const uploadController = new UploadController(new UploadImageUseCase());
+  const adminController = new AdminController(container.listPendingUsersUseCase, container.approveUserUseCase, container.rejectUserUseCase);
 
   app.disable('x-powered-by');
   app.use(helmet());
@@ -45,6 +48,7 @@ export function createApp(): express.Express {
   app.use('/api/auth', createAuthRouter(authController));
   app.use('/api/rooms', createRoomRouter(roomController, authMiddleware));
   app.use('/api/upload', createUploadRouter(uploadController, authMiddleware));
+  app.use('/api/admin', createAdminRouter(adminController, authMiddleware));
 
   app.use(errorMiddleware);
 

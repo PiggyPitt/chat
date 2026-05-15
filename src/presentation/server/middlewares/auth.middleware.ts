@@ -15,12 +15,21 @@ export class AuthMiddleware {
       if (!token) {
         throw new HttpError('Invalid authorization header', 401);
       }
-      const { userId, username } = await this.authService.verifyToken(token);
+      const { userId, username, role } = await this.authService.verifyToken(token);
       req.userId = userId;
       req.username = username;
+      req.role = role;
       next();
     } catch (error) {
       next(error);
     }
+  };
+
+  requireAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (req.role !== 'admin') {
+      next(new HttpError('Admin access required', 403));
+      return;
+    }
+    next();
   };
 }

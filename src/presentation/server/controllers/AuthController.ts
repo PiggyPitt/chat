@@ -20,7 +20,7 @@ export class AuthController {
     try {
       validateLogin(req.body);
       const { user, token } = await this.loginUseCase.execute(req.body.username, req.body.password);
-      res.status(200).json({ token, userId: user.id, username: user.username });
+      res.status(200).json({ token, userId: user.id, username: user.username, role: user.role });
     } catch (error) {
       next(error);
     }
