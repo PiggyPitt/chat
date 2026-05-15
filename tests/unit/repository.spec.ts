@@ -4,6 +4,7 @@ import { MongoRoomRepository } from '../../src/infrastructure/repositories/Mongo
 import { MongoUserRepository } from '../../src/infrastructure/repositories/MongoUserRepository.js';
 import { MongoMessageRepository } from '../../src/infrastructure/repositories/MongoMessageRepository.js';
 import { Room } from '../../src/domain/entities/Room.js';
+import { Message } from '../../src/domain/entities/Message.js';
 
 describe('Mongo repositories', () => {
   let mongoServer: MongoMemoryServer;
@@ -37,7 +38,7 @@ describe('Mongo repositories', () => {
 
   it('stores messages and retrieves room history', async () => {
     const repo = new MongoMessageRepository();
-    await repo.create({ id: 'm1', roomId: 'r1', senderId: 'u1', senderUsername: 'mike', content: 'hello', createdAt: new Date() });
+    await repo.create(new Message({ id: 'm1', roomId: 'r1', senderId: 'u1', senderUsername: 'mike', content: 'hello', createdAt: new Date() }));
     const messages = await repo.listByRoom('r1');
     expect(messages[0]!.content).toBe('hello');
   });

@@ -42,7 +42,10 @@ export async function checkAndUpdate(): Promise<void> {
     const res = await fetch(API_URL, {
       headers: { 'User-Agent': 'chat-cli-updater' },
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      console.error(`  [updater] GitHub API returned ${res.status}`);
+      return;
+    }
 
     const release = await res.json() as GitHubRelease;
     const latestVersion = release.tag_name.replace(/^v/, '');
@@ -71,7 +74,7 @@ export async function checkAndUpdate(): Promise<void> {
     child.unref();
     process.exit(0);
 
-  } catch {
-    // Silent — don't block startup on network/update errors
+  } catch (err) {
+    console.error(`  [updater] ${(err as Error).message}`);
   }
 }

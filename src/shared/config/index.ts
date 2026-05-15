@@ -19,5 +19,6 @@ export const config = {
   rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60000),
   rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 10),
   serverUrl: process.env.SERVER_URL as string,
-  socketPath: process.env.SOCKET_PATH ?? '/socket.io'
+  socketPath: process.env.SOCKET_PATH ?? '/socket.io',
+  uploadDir: process.env.UPLOAD_DIR ?? './uploads'
 };

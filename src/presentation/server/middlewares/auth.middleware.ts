@@ -15,8 +15,9 @@ export class AuthMiddleware {
       if (!token) {
         throw new HttpError('Invalid authorization header', 401);
       }
-      const { userId } = await this.authService.verifyToken(token);
+      const { userId, username } = await this.authService.verifyToken(token);
       req.userId = userId;
+      req.username = username;
       next();
     } catch (error) {
       next(error);

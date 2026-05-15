@@ -1,13 +1,13 @@
 import { IMessageService } from '../../application/interfaces/services/IMessageService';
 import { IMessageRepository } from '../../application/interfaces/repositories/IMessageRepository';
-import { Message } from '../../domain/entities/Message';
+import { Message, MessageType } from '../../domain/entities/Message';
 import { randomUUID } from 'node:crypto';
 
 export class MessageService implements IMessageService {
   constructor(private readonly messageRepository: IMessageRepository) {}
 
-  async sendMessage(roomId: string, senderId: string, senderUsername: string, content: string): Promise<Message> {
-    const message = new Message({ id: randomUUID(), roomId, senderId, senderUsername, content });
+  async sendMessage(roomId: string, senderId: string, senderUsername: string, content: string, type: MessageType = 'text'): Promise<Message> {
+    const message = new Message({ id: randomUUID(), roomId, senderId, senderUsername, content, type });
     return this.messageRepository.create(message);
   }
 

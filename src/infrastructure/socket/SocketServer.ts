@@ -64,8 +64,9 @@ export class SocketServer {
       socket.on('leave-room', async (roomName: string, callback: (error: string | null) => void) => {
         try {
           const room = await this.roomService.leaveRoom(roomName, userId);
-          socket.leave(room.id);
+          // emit BEFORE leave — socket.to() targets only remaining room members
           socket.to(room.id).emit('user-left', { userId, username, roomId: room.id });
+          socket.leave(room.id);
           callback(null);
         } catch (error) {
           callback((error as Error).message);
@@ -82,6 +83,17 @@ export class SocketServer {
         }
       });
 
+
+      socket.on('send-image', async (roomId: string, imageUrl: string, callback: (error: string | null) => void) => {
+        try {
+          const message = await this.messageService.sendMessage(roomId, userId, username, imageUrl, 'image');
+          this.io?.to(roomId).emit('new-message', { message, senderId: userId, senderUsername: username });
+          callback(null);
+        } catch (error) {
+          callback((error as Error).message);
+        }
+      });
+
       socket.on('list-users', async (roomId: string, callback: (error: string | null, users?: string[]) => void) => {
         try {
           const sockets = await this.io?.in(roomId).fetchSockets();
@@ -89,6 +101,14 @@ export class SocketServer {
           callback(null, Array.from(new Set(users)));
         } catch (error) {
           callback((error as Error).message);
+        }
+      });
+
+      // disconnecting fires before Socket.IO removes the socket from rooms
+      socket.on('disconnecting', () => {
+        for (const roomId of socket.rooms) {
+          if (roomId === socket.id) continue; // skip the socket's own default room
+          socket.to(roomId).emit('user-left', { userId, username, roomId });
         }
       });
 

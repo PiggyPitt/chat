@@ -4,6 +4,8 @@ import { ChatSocketClient } from './socket-client.js';
 import { cliConfig } from './cli-config.js';
 import { checkAndUpdate } from './updater.js';
 import { VERSION } from '../../version.js';
+import { AnsiHyperlink } from '../../shared/terminal/AnsiHyperlink.js';
+import { detectDragDropPath, uploadImageFile, captureAndUploadClipboard } from './commands/image.command.js';
 
 function formatDate(value: string | Date): string {
   const d = new Date(value);
@@ -16,9 +18,14 @@ function formatDate(value: string | Date): string {
 }
 
 function clearInputLine(): void {
-  // After readline echoes the input and adds \n, cursor is on next line.
-  // Move up + clear the typed line so it doesn't appear in output.
   process.stdout.write('\x1b[1A\x1b[2K\r');
+}
+
+function renderMessageContent(type: string | undefined, content: string): string {
+  if (type === 'image') {
+    return `${AnsiHyperlink.imageLink(content)}  ${AnsiHyperlink.downloadLink(content)}`;
+  }
+  return AnsiHyperlink.autoLink(content);
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
@@ -130,7 +137,6 @@ async function startSession(
       isFirstConnect = false;
       return;
     }
-    // Reconnected — rejoin the room if we were in one
     process.stdout.write('\r\x1b[K  [reconnected]\n> ');
     if (currentRoomName) {
       client.joinRoom(currentRoomName, currentRoomPassword)
@@ -149,9 +155,10 @@ async function startSession(
   });
 
   client.onNewMessage((payload) => {
-    const msg = payload.message as { content: string; createdAt: string };
+    const msg = payload.message as { type?: string; content: string; createdAt: string };
     const sender = (payload as unknown as { senderUsername: string }).senderUsername;
-    process.stdout.write(`\r\x1b[K  [${formatDate(msg.createdAt)}] ${sender}: ${msg.content}\n> `);
+    const rendered = renderMessageContent(msg.type, msg.content);
+    process.stdout.write(`\r\x1b[K  [${formatDate(msg.createdAt)}] ${sender}: ${rendered}\n> `);
   });
 
   client.onUserJoined((payload) => {
@@ -160,8 +167,7 @@ async function startSession(
   });
 
   client.onUserLeft((payload) => {
-    const p = payload as unknown as { username: string; roomId: string };
-    process.stdout.write(`\r\x1b[K  ${p.username} left the room\n> `);
+    process.stdout.write(`\r\x1b[K  ${payload.username} left the room\n> `);
   });
 
   printHelp();
@@ -198,6 +204,20 @@ async function handleCommand(
   currentRoomId: string | null,
   setRoom: (id: string | null, name: string | null, password?: string) => void
 ): Promise<boolean> {
+  // Detect drag-and-drop: Windows Terminal pastes the file path when a file is dragged in
+  const dragDropPath = detectDragDropPath(command);
+  if (dragDropPath) {
+    if (!currentRoomId) {
+      console.log('  Join a room first to send an image.');
+      return false;
+    }
+    console.log('  Detected image file, uploading...');
+    const result = await uploadImageFile(dragDropPath, cliConfig.serverUrl, token);
+    await client.sendImage(currentRoomId, result.publicUrl);
+    console.log('  Image sent.');
+    return false;
+  }
+
   const [action, ...args] = command.split(' ');
 
   switch (action) {
@@ -235,8 +255,9 @@ async function handleCommand(
       const { roomId, messages } = await client.joinRoom(roomName, password);
       setRoom(roomId, roomName, password);
       console.log(`  Joined: ${roomName}\n`);
-      (messages as { senderUsername: string; content: string; createdAt: string }[]).forEach((m) => {
-        console.log(`  [${formatDate(m.createdAt)}] ${m.senderUsername}: ${m.content}`);
+      (messages as { senderUsername: string; type?: string; content: string; createdAt: string }[]).forEach((m) => {
+        const rendered = renderMessageContent(m.type, m.content);
+        console.log(`  [${formatDate(m.createdAt)}] ${m.senderUsername}: ${rendered}`);
       });
       if (messages.length > 0) console.log('');
       return false;
@@ -264,8 +285,40 @@ async function handleCommand(
       return false;
     }
 
+    case '/upload': {
+      if (!currentRoomId) {
+        console.log('  Join a room first.');
+        return false;
+      }
+      const filePath = args.join(' ');
+      if (!filePath) {
+        console.log('  Usage: /upload <path-to-image>');
+        return false;
+      }
+      console.log('  Uploading...');
+      const result = await uploadImageFile(filePath, cliConfig.serverUrl, token);
+      await client.sendImage(currentRoomId, result.publicUrl);
+      console.log('  Image sent.');
+      return false;
+    }
+
+    case '/paste-image': {
+      if (!currentRoomId) {
+        console.log('  Join a room first.');
+        return false;
+      }
+      console.log('  Reading clipboard...');
+      const result = await captureAndUploadClipboard(cliConfig.serverUrl, token);
+      if (!result) {
+        console.log('  No image found in clipboard. Use Win+Shift+S then Ctrl+V to capture.');
+        return false;
+      }
+      await client.sendImage(currentRoomId, result.publicUrl);
+      console.log('  Image sent.');
+      return false;
+    }
+
     case 'msg': {
-      // explicit msg command still works
       if (!currentRoomId) {
         console.log('  Join a room first.');
         return false;
@@ -289,7 +342,6 @@ async function handleCommand(
       return true;
 
     default:
-      // If inside a room, treat any unrecognized input as a message
       if (currentRoomId) {
         await client.sendMessage(currentRoomId, command);
       } else {
@@ -302,15 +354,18 @@ async function handleCommand(
 function printHelp(): void {
   console.log('');
   console.log('  Command                         Description');
-  console.log('  ──────────────────────────────────────────────────');
+  console.log('  ──────────────────────────────────────────────────────────');
   console.log('  rooms                           List all rooms');
   console.log('  create <name> [-p <password>]   Create a room');
   console.log('  join   <name> [-p <password>]   Join a room');
   console.log('  <message>                       Send a message (when in room)');
+  console.log('  /upload <path>                  Upload and send an image file');
+  console.log('  /paste-image                    Upload image from clipboard');
+  console.log('  <drag image here>               Drag & drop image into terminal');
   console.log('  users                           List online users');
   console.log('  leave  <name>                   Leave a room');
   console.log('  exit                            Quit');
-  console.log('  ──────────────────────────────────────────────────');
+  console.log('  ──────────────────────────────────────────────────────────');
   console.log('');
 }
 
