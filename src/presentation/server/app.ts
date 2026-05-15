@@ -27,7 +27,10 @@ export function createApp(): express.Express {
     windowMs: config.rateLimitWindowMs,
     max: config.rateLimitMax,
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    handler: (req, res) => {
+      res.status(429).json({ error: 'Too many requests, please try again later.' });
+    }
   });
 
   app.use('/api/auth', limiter);

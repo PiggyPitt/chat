@@ -21,6 +21,19 @@ function clearInputLine(): void {
   process.stdout.write('\x1b[1A\x1b[2K\r');
 }
 
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  let body: { error?: string };
+  try {
+    body = JSON.parse(text) as { error?: string };
+  } catch {
+    if (!response.ok) throw new Error(`Server error (${response.status})`);
+    throw new Error('Invalid response from server');
+  }
+  if (!response.ok) throw new Error(body.error ?? 'Request failed');
+  return body as T;
+}
+
 async function requestJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
   const response = await fetch(`${cliConfig.serverUrl}/api/${path}`, {
     method: 'POST',
@@ -30,9 +43,7 @@ async function requestJson<T>(path: string, payload: unknown, token?: string): P
     },
     body: JSON.stringify(payload)
   });
-  const body = (await response.json()) as { error?: string };
-  if (!response.ok) throw new Error(body.error ?? 'Request failed');
-  return body as T;
+  return parseJsonResponse<T>(response);
 }
 
 async function requestGet<T>(path: string, token: string): Promise<T> {
@@ -40,9 +51,7 @@ async function requestGet<T>(path: string, token: string): Promise<T> {
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` }
   });
-  const body = (await response.json()) as { error?: string };
-  if (!response.ok) throw new Error(body.error ?? 'Request failed');
-  return body as T;
+  return parseJsonResponse<T>(response);
 }
 
 async function main(): Promise<void> {
@@ -51,7 +60,6 @@ async function main(): Promise<void> {
   console.log('');
   console.log('  ┌─────────────────────────────┐');
   console.log(`  │   Terminal Chat  v${VERSION.padEnd(9)}│`);
-  console.log(`  │   ${cliConfig.serverUrl.replace('https://', '')}   │`);
   console.log('  └─────────────────────────────┘');
   console.log('');
 
