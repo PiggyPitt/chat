@@ -21,6 +21,15 @@ function clearInputLine(): void {
   process.stdout.write('\x1b[1A\x1b[2K\r');
 }
 
+function printAbovePrompt(text: string, rl: readline.Interface): void {
+  const currentInput = (rl as any).line as string ?? '';
+  const cursorOffset = (rl as any)._cursor as number ?? currentInput.length;
+  process.stdout.write(`\r\x1b[K${text}\n> ${currentInput}`);
+  if (cursorOffset < currentInput.length) {
+    process.stdout.write(`\x1b[${currentInput.length - cursorOffset}D`);
+  }
+}
+
 function renderMessageContent(type: string | undefined, content: string): string {
   if (type === 'image') {
     return `${AnsiHyperlink.imageLink(content)}  ${AnsiHyperlink.downloadLink(content)}`;
@@ -137,37 +146,37 @@ async function startSession(
       isFirstConnect = false;
       return;
     }
-    process.stdout.write('\r\x1b[K  [reconnected]\n> ');
+    printAbovePrompt('  [reconnected]', rl);
     if (currentRoomName) {
       client.joinRoom(currentRoomName, currentRoomPassword)
         .then(({ roomId }) => {
           currentRoomId = roomId;
-          process.stdout.write(`\r\x1b[K  [back in room: ${currentRoomName}]\n> `);
+          printAbovePrompt(`  [back in room: ${currentRoomName}]`, rl);
         })
         .catch(() => {
-          process.stdout.write(`\r\x1b[K  [could not rejoin ${currentRoomName}]\n> `);
+          printAbovePrompt(`  [could not rejoin ${currentRoomName}]`, rl);
         });
     }
   });
 
   client.onDisconnect((reason) => {
-    process.stdout.write(`\r\x1b[K  [disconnected: ${reason} — reconnecting...]\n> `);
+    printAbovePrompt(`  [disconnected: ${reason} — reconnecting...]`, rl);
   });
 
   client.onNewMessage((payload) => {
     const msg = payload.message as { type?: string; content: string; createdAt: string };
     const sender = (payload as unknown as { senderUsername: string }).senderUsername;
     const rendered = renderMessageContent(msg.type, msg.content);
-    process.stdout.write(`\r\x1b[K  [${formatDate(msg.createdAt)}] ${sender}: ${rendered}\n> `);
+    printAbovePrompt(`  [${formatDate(msg.createdAt)}] ${sender}: ${rendered}`, rl);
   });
 
   client.onUserJoined((payload) => {
     const p = payload as unknown as { username: string; roomId: string };
-    process.stdout.write(`\r\x1b[K  ${p.username} joined the room\n> `);
+    printAbovePrompt(`  ${p.username} joined the room`, rl);
   });
 
   client.onUserLeft((payload) => {
-    process.stdout.write(`\r\x1b[K  ${payload.username} left the room\n> `);
+    printAbovePrompt(`  ${payload.username} left the room`, rl);
   });
 
   printHelp(auth.role);
