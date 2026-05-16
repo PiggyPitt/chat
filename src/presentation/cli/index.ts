@@ -180,7 +180,7 @@ async function startSession(
 
     try {
       const done = await handleCommand(
-        command, auth.token, auth.role, client, currentRoomId,
+        command, auth.token, auth.role, client, currentRoomId, currentRoomName,
         (id, name, password) => {
           currentRoomId = id;
           currentRoomName = name;
@@ -204,6 +204,7 @@ async function handleCommand(
   role: string,
   client: ChatSocketClient,
   currentRoomId: string | null,
+  currentRoomName: string | null,
   setRoom: (id: string | null, name: string | null, password?: string) => void
 ): Promise<boolean> {
   // Detect drag-and-drop: Windows Terminal pastes the file path when a file is dragged in
@@ -266,9 +267,9 @@ async function handleCommand(
     }
 
     case 'leave': {
-      const roomName = args.join(' ');
+      const roomName = args.join(' ') || currentRoomName;
       if (!roomName) {
-        console.log('  Usage: leave <room-name>');
+        console.log('  Not in any room.');
         return false;
       }
       await client.leaveRoom(roomName);

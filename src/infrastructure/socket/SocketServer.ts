@@ -97,7 +97,7 @@ export class SocketServer {
       socket.on('list-users', async (roomId: string, callback: (error: string | null, users?: string[]) => void) => {
         try {
           const sockets = await this.io?.in(roomId).fetchSockets();
-          const users = sockets?.map((client) => client.data.userId as string).filter(Boolean) ?? [];
+          const users = sockets?.map((client) => client.data.username as string).filter(Boolean) ?? [];
           callback(null, Array.from(new Set(users)));
         } catch (error) {
           callback((error as Error).message);
