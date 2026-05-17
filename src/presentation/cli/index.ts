@@ -6,6 +6,7 @@ import { checkAndUpdate } from './updater.js';
 import { VERSION } from '../../version.js';
 import { AnsiHyperlink } from '../../shared/terminal/AnsiHyperlink.js';
 import { detectDragDropPath, uploadImageFile, captureAndUploadClipboard } from './commands/image.command.js';
+import { ManagementNotificationService } from './notifications/ManagementNotificationService.js';
 
 function formatDate(value: string | Date): string {
   const d = new Date(value);
@@ -136,6 +137,9 @@ async function startSession(
   const client = new ChatSocketClient(auth.token);
   client.connect();
 
+  const notificationService = new ManagementNotificationService();
+  notificationService.setCurrentUserId(auth.userId);
+
   let currentRoomId: string | null = null;
   let currentRoomName: string | null = null;
   let currentRoomPassword: string | undefined = undefined;
@@ -164,15 +168,13 @@ async function startSession(
   });
 
   client.onNewMessage((payload) => {
-    const msg = payload.message as { type?: string; content: string; createdAt: string };
-    const sender = (payload as unknown as { senderUsername: string }).senderUsername;
-    const rendered = renderMessageContent(msg.type, msg.content);
-    printAbovePrompt(`  [${formatDate(msg.createdAt)}] ${sender}: ${rendered}`, rl);
+    notificationService.handleIncomingMessage(payload);
+    const rendered = renderMessageContent(payload.message.type, payload.message.content);
+    printAbovePrompt(`  [${formatDate(payload.message.createdAt)}] ${payload.senderUsername}: ${rendered}`, rl);
   });
 
   client.onUserJoined((payload) => {
-    const p = payload as unknown as { username: string; roomId: string };
-    printAbovePrompt(`  ${p.username} joined the room`, rl);
+    printAbovePrompt(`  ${payload.username} joined the room`, rl);
   });
 
   client.onUserLeft((payload) => {
@@ -189,7 +191,7 @@ async function startSession(
 
     try {
       const done = await handleCommand(
-        command, auth.token, auth.role, client, currentRoomId, currentRoomName,
+        command, auth.token, auth.role, client, currentRoomId, currentRoomName, notificationService,
         (id, name, password) => {
           currentRoomId = id;
           currentRoomName = name;
@@ -214,6 +216,7 @@ async function handleCommand(
   client: ChatSocketClient,
   currentRoomId: string | null,
   currentRoomName: string | null,
+  notificationService: ManagementNotificationService,
   setRoom: (id: string | null, name: string | null, password?: string) => void
 ): Promise<boolean> {
   // Detect drag-and-drop: Windows Terminal pastes the file path when a file is dragged in
@@ -266,6 +269,7 @@ async function handleCommand(
       }
       const { roomId, messages } = await client.joinRoom(roomName, password);
       setRoom(roomId, roomName, password);
+      notificationService.setCurrentRoom(roomName);
       console.log(`  Joined: ${roomName}\n`);
       (messages as { senderUsername: string; type?: string; content: string; createdAt: string }[]).forEach((m) => {
         const rendered = renderMessageContent(m.type, m.content);
@@ -283,6 +287,7 @@ async function handleCommand(
       }
       await client.leaveRoom(roomName);
       setRoom(null, null);
+      notificationService.setCurrentRoom(null);
       console.log(`  Left room: ${roomName}`);
       return false;
     }
@@ -393,6 +398,16 @@ async function handleCommand(
       return false;
     }
 
+    case '/mute': {
+      if (!currentRoomName) {
+        console.log('  Join a room first.');
+        return false;
+      }
+      const nowMuted = notificationService.toggleMute(currentRoomName);
+      console.log(`  Notifications for "${currentRoomName}": ${nowMuted ? 'muted' : 'enabled'}`);
+      return false;
+    }
+
     case 'help':
       printHelp(role);
       return false;
@@ -425,6 +440,7 @@ function printHelp(role: string): void {
   console.log('  <drag or paste image path>      Drag & drop image file into terminal');
   console.log('  users                           List online users');
   console.log('  leave  <name>                   Leave a room');
+  console.log('  /mute                           Toggle notifications for current room');
   if (role === 'admin') {
     console.log('  ──────────────────────────────────────────────────────────');
     console.log('  /requestedregister              List pending registrations');

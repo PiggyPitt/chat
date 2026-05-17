@@ -1,9 +1,21 @@
 import { io, type Socket } from 'socket.io-client';
 import { cliConfig } from './cli-config';
 
+// ── Wire-format types ──────────────────────────────────────────────────────────
+
+export interface NewMessagePayload {
+  message: {
+    type?: string;
+    content: string;
+    createdAt: string;
+  };
+  senderId: string;
+  senderUsername: string;
+}
+
 type ServerToClientEvents = {
-  'new-message': (payload: { message: unknown; senderId: string }) => void;
-  'user-joined': (payload: { userId: string; roomId: string }) => void;
+  'new-message': (payload: NewMessagePayload) => void;
+  'user-joined': (payload: { userId: string; username: string; roomId: string }) => void;
   'user-left': (payload: { userId: string; username: string; roomId: string }) => void;
 };
 
@@ -14,6 +26,8 @@ type ClientToServerEvents = {
   'send-image': (roomId: string, imageUrl: string, callback: (error: string | null) => void) => void;
   'list-users': (roomId: string, callback: (error: string | null, users?: string[]) => void) => void;
 };
+
+// ── Client ────────────────────────────────────────────────────────────────────
 
 export class ChatSocketClient {
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
@@ -42,11 +56,11 @@ export class ChatSocketClient {
     this.socket?.on('disconnect', handler);
   }
 
-  onNewMessage(handler: (payload: { message: unknown; senderId: string }) => void): void {
+  onNewMessage(handler: (payload: NewMessagePayload) => void): void {
     this.socket?.on('new-message', handler);
   }
 
-  onUserJoined(handler: (payload: { userId: string; roomId: string }) => void): void {
+  onUserJoined(handler: (payload: { userId: string; username: string; roomId: string }) => void): void {
     this.socket?.on('user-joined', handler);
   }
 
