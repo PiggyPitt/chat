@@ -1,5 +1,6 @@
 import readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import { execFileSync } from 'node:child_process';
 import { ChatSocketClient } from './socket-client.js';
 import { cliConfig } from './cli-config.js';
 import { checkAndUpdate } from './updater.js';
@@ -7,6 +8,14 @@ import { VERSION } from '../../version.js';
 import { AnsiHyperlink } from '../../shared/terminal/AnsiHyperlink.js';
 import { detectDragDropPath, uploadImageFile, captureAndUploadClipboard } from './commands/image.command.js';
 import { ManagementNotificationService } from './notifications/ManagementNotificationService.js';
+
+// Switch Windows console to UTF-8 so Thai and other Unicode characters render correctly.
+// chcp.com is the codepage utility; 65001 = UTF-8.
+if (process.platform === 'win32') {
+  try {
+    execFileSync('chcp.com', ['65001'], { stdio: 'ignore', windowsHide: true });
+  } catch { /* non-critical — falls back to whatever the user's active code page is */ }
+}
 
 function formatDate(value: string | Date): string {
   const d = new Date(value);
