@@ -132,17 +132,36 @@ Self-installing bootstrap for the portable `.exe`. Called once at the very top o
 **Flow:**
 1. Guard: skip if not `win32`, not pkg-bundled, or already installed
 2. `createDirectories()` — creates `%LOCALAPPDATA%\chat-cli\{assets,logs}` and `%APPDATA%\chat-cli\`
-3. `copyExecutable()` — copies `process.execPath` → `%LOCALAPPDATA%\chat-cli\chat-cli.exe`
+3. `copyExecutable()` — copies `process.execPath` → `%LOCALAPPDATA%\chat-cli\chat-cli.exe`, then writes `.installed` marker
 4. `addToUserPath()` — PowerShell 5.1 script modifies USER PATH registry key (no admin needed, idempotent)
 5. `relaunch()` — `spawn(installedExePath, detached, stdio:'inherit')` + `process.exit(0)`
 
-**Detection:** `normalize(process.execPath).toLowerCase() === normalize(installedExePath).toLowerCase()`  
+**"Already installed" detection:** marker file `%LOCALAPPDATA%\chat-cli\.installed` exists AND exe exists.  
 **Dev guard:** `typeof process.pkg === 'undefined'` → skip when running via tsx/node  
 **Platform guard:** `process.platform !== 'win32'` → skip on non-Windows
 
 Install paths:
 - Exe: `%LOCALAPPDATA%\chat-cli\chat-cli.exe`
-- Config: `%APPDATA%\chat-cli\config.json`
+- Marker: `%LOCALAPPDATA%\chat-cli\.installed` (content = ISO timestamp of install)
+- Config dir: `%APPDATA%\chat-cli\`
+
+### Bug history & decisions
+
+**Bug: infinite install loop (fixed)**  
+Original `isInstalled()` compared `normalize(process.execPath)` against `installedExePath`. In `@yao-pkg/pkg`, `process.execPath` may resolve to the embedded Node.js runtime path rather than the `.exe` string, so the comparison always returned `false` → every launch re-installed and re-launched forever.  
+**Fix:** replaced path comparison with marker file check (`existsSync(markerPath) && existsSync(installedExePath)`). Marker is written only after a successful exe copy, so it is a reliable installation signal regardless of how pkg resolves `process.execPath`.
+
+### Edge cases
+
+| # | Scenario | Behaviour |
+|---|---|---|
+| EC-1 | `copyExecutable()` throws mid-install | Marker not yet written → next run retries install cleanly (no stale marker) |
+| EC-2 | Marker present but exe deleted | `isInstalled()` = false → re-installs (copies + rewrites marker) |
+| EC-3 | `process.execPath === installedExePath` (same path string) | `copyFileSync` skipped — guards against self-overwrite / file truncation |
+| EC-4 | LOCALAPPDATA / APPDATA env vars missing | `runIfNeeded()` logs error and returns — app continues without installing |
+| EC-5 | PowerShell unavailable or PATH write fails | Non-fatal — installer warns and continues; user sees manual instruction |
+| EC-6 | User re-runs downloaded exe after install | Marker found → `isInstalled()` = true → skip install → app opens normally |
+| EC-7 | New version downloaded (upgrade path) | Marker found → skip bootstrap installer; `checkAndUpdate()` (updater.ts) handles version upgrades separately |
 
 ## Dev Commands
 

@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync, mkdirSync } from 'fs';
-import { join, normalize } from 'path';
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { execFileSync, spawn } from 'child_process';
 
 const APP_NAME = 'chat-cli';
@@ -32,11 +32,19 @@ export class InstallerBootstrapService {
   private readonly configDir: string;
   /** Full path to the installed executable */
   private readonly installedExePath: string;
+  /**
+   * Marker file written once during installation.
+   * Existence of this file is the sole signal that installation has completed.
+   * Avoids relying on process.execPath which pkg may resolve differently
+   * from the actual .exe path (e.g. to an embedded Node.js runtime path).
+   */
+  private readonly markerPath: string;
 
   private constructor(localAppData: string, appData: string) {
     this.installDir = join(localAppData, APP_NAME);
     this.configDir = join(appData, APP_NAME);
     this.installedExePath = join(this.installDir, EXE_NAME);
+    this.markerPath = join(this.installDir, '.installed');
   }
 
   // ──────────────────────────────────────────────
@@ -70,14 +78,12 @@ export class InstallerBootstrapService {
   // ──────────────────────────────────────────────
 
   /**
-   * True when process.execPath already points at the install location.
-   * Comparison is case-insensitive (Windows paths are case-insensitive).
+   * True when both the marker file AND the executable exist at the install location.
+   * Marker-only check could pass after a corrupt/partial install (e.g. marker written
+   * but exe then deleted). Requiring the exe guards against that case.
    */
   isInstalled(): boolean {
-    return (
-      normalize(process.execPath).toLowerCase() ===
-      normalize(this.installedExePath).toLowerCase()
-    );
+    return existsSync(this.markerPath) && existsSync(this.installedExePath);
   }
 
   // ──────────────────────────────────────────────
@@ -88,7 +94,7 @@ export class InstallerBootstrapService {
     console.log(`\n  Installing ${APP_NAME}...\n`);
 
     this.createDirectories();
-    this.copyExecutable();
+    this.copyExecutable();   // marker is written here, after a successful copy
     this.addToUserPath();
     this.relaunch();
   }
@@ -96,6 +102,8 @@ export class InstallerBootstrapService {
   /**
    * Creates the full directory tree required by the application.
    * All mkdirSync calls are idempotent (recursive: true).
+   * Does NOT write the marker here — the marker is only written after a
+   * successful exe copy, so a failed copy never leaves a stale marker.
    */
   private createDirectories(): void {
     const dirs: string[] = [
@@ -115,19 +123,27 @@ export class InstallerBootstrapService {
   }
 
   /**
-   * Copies the running executable to the install location.
-   * Overwrites any stale copy (idempotent — safe to run again after update).
+   * Copies the running executable to the install location, then writes the
+   * marker file.  Marker is written last so a failed copy never produces a
+   * stale marker that silently bypasses future installation attempts.
+   *
+   * EC: guards src === dest — if pkg resolves process.execPath to the same
+   * string as installedExePath, copyFileSync would truncate the running exe.
    */
   private copyExecutable(): void {
     const src = process.execPath;
     const dest = this.installedExePath;
 
-    try {
-      copyFileSync(src, dest);
-      console.log(`  Installed: ${dest}`);
-    } catch (err) {
-      throw new Error(`Failed to copy executable: ${(err as Error).message}`);
+    if (src.toLowerCase() !== dest.toLowerCase()) {
+      try {
+        copyFileSync(src, dest);
+      } catch (err) {
+        throw new Error(`Failed to copy executable: ${(err as Error).message}`);
+      }
     }
+
+    writeFileSync(this.markerPath, new Date().toISOString(), 'utf8');
+    console.log(`  Installed: ${dest}`);
   }
 
   /**
