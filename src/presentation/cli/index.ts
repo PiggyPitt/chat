@@ -8,6 +8,7 @@ import { VERSION } from '../../version.js';
 import { AnsiHyperlink } from '../../shared/terminal/AnsiHyperlink.js';
 import { detectDragDropPath, uploadImageFile, captureAndUploadClipboard } from './commands/image.command.js';
 import { ManagementNotificationService } from './notifications/ManagementNotificationService.js';
+import { InstallerBootstrapService } from './installer/InstallerBootstrapService.js';
 
 // Switch Windows console to UTF-8 so Thai and other Unicode characters render correctly.
 // chcp.com is the codepage utility; 65001 = UTF-8.
@@ -459,6 +460,13 @@ function printHelp(role: string): void {
   console.log('  exit                            Quit');
   console.log('  ──────────────────────────────────────────────────────────');
   console.log('');
+}
+
+try {
+  InstallerBootstrapService.runIfNeeded();
+} catch (error) {
+  console.error(`  [installer] ${(error as Error).message}`);
+  // non-fatal — continue with normal startup
 }
 
 checkAndUpdate()
