@@ -14,9 +14,16 @@ export class MongoMessageRepository implements IMessageRepository {
     return this.toDomain(doc as MessageDocument);
   }
 
-  async listByRoom(roomId: string, limit = 50): Promise<Message[]> {
-    const docs = await MessageModel.find({ roomId }).sort({ createdAt: -1 }).limit(limit).lean().exec();
+  async listByRoom(roomId: string, limit = 50, before?: Date): Promise<Message[]> {
+    const query: Record<string, unknown> = { roomId };
+    if (before) query.createdAt = { $lt: before };
+    const docs = await MessageModel.find(query).sort({ createdAt: -1 }).limit(limit).lean().exec();
     return (docs as unknown as MessageDocument[]).map((doc) => this.toDomain(doc)).reverse();
+  }
+
+  async deleteByRoom(roomId: string): Promise<number> {
+    const result = await MessageModel.deleteMany({ roomId }).exec();
+    return result.deletedCount ?? 0;
   }
 
   private toDomain(doc: MessageDocument): Message {

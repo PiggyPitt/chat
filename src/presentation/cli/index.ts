@@ -1,7 +1,7 @@
 import readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { execFileSync } from 'node:child_process';
-import { ChatSocketClient } from './socket-client.js';
+import { ChatSocketClient, type HistoryMessage } from './socket-client.js';
 import { cliConfig } from './cli-config.js';
 import { checkAndUpdate } from './updater.js';
 import { VERSION } from '../../version.js';
@@ -155,6 +155,19 @@ async function startSession(
   let currentRoomPassword: string | undefined = undefined;
   let isFirstConnect = true;
 
+  const historyState = { oldest: undefined as string | undefined, noMore: false, loading: false };
+
+  function resetHistoryState(messages?: HistoryMessage[]): void {
+    historyState.loading = false;
+    if (!messages || messages.length === 0) {
+      historyState.oldest = undefined;
+      historyState.noMore = true;
+    } else {
+      historyState.oldest = messages[0]!.createdAt;
+      historyState.noMore = messages.length < 50;
+    }
+  }
+
   client.onConnect(() => {
     if (isFirstConnect) {
       isFirstConnect = false;
@@ -163,8 +176,9 @@ async function startSession(
     printAbovePrompt('  [reconnected]', rl);
     if (currentRoomName) {
       client.joinRoom(currentRoomName, currentRoomPassword)
-        .then(({ roomId }) => {
+        .then(({ roomId, messages }) => {
           currentRoomId = roomId;
+          resetHistoryState(messages);
           printAbovePrompt(`  [back in room: ${currentRoomName}]`, rl);
         })
         .catch(() => {
@@ -201,11 +215,14 @@ async function startSession(
 
     try {
       const done = await handleCommand(
-        command, auth.token, auth.role, client, currentRoomId, currentRoomName, notificationService,
+        command, auth.token, auth.role, client, currentRoomId, currentRoomName, notificationService, historyState,
         (id, name, password) => {
           currentRoomId = id;
           currentRoomName = name;
           currentRoomPassword = password;
+          historyState.oldest = undefined;
+          historyState.noMore = false;
+          historyState.loading = false;
         }
       );
       if (done) {
@@ -227,6 +244,7 @@ async function handleCommand(
   currentRoomId: string | null,
   currentRoomName: string | null,
   notificationService: ManagementNotificationService,
+  historyState: { oldest: string | undefined; noMore: boolean; loading: boolean },
   setRoom: (id: string | null, name: string | null, password?: string) => void
 ): Promise<boolean> {
   // Detect drag-and-drop: Windows Terminal pastes the file path when a file is dragged in
@@ -280,8 +298,14 @@ async function handleCommand(
       const { roomId, messages } = await client.joinRoom(roomName, password);
       setRoom(roomId, roomName, password);
       notificationService.setCurrentRoom(roomName);
+      if (messages.length === 0) {
+        historyState.noMore = true;
+      } else {
+        historyState.oldest = messages[0]!.createdAt;
+        historyState.noMore = messages.length < 50;
+      }
       console.log(`  Joined: ${roomName}\n`);
-      (messages as { senderUsername: string; type?: string; content: string; createdAt: string }[]).forEach((m) => {
+      messages.forEach((m) => {
         const rendered = renderMessageContent(m.type, m.content);
         console.log(`  [${formatDate(m.createdAt)}] ${m.senderUsername}: ${rendered}`);
       });
@@ -298,7 +322,47 @@ async function handleCommand(
       await client.leaveRoom(roomName);
       setRoom(null, null);
       notificationService.setCurrentRoom(null);
-      console.log(`  Left room: ${roomName}`);
+      process.stdout.write('\x1b[2J\x1b[H');
+      console.log(`  Left room: ${roomName}\n`);
+      return false;
+    }
+
+    case 'more': {
+      if (!currentRoomId) {
+        console.log('  Join a room first.');
+        return false;
+      }
+      if (historyState.noMore) {
+        console.log('  No older messages.');
+        return false;
+      }
+      if (historyState.loading) {
+        console.log('  Already loading history...');
+        return false;
+      }
+      if (!historyState.oldest) {
+        console.log('  No older messages.');
+        return false;
+      }
+      historyState.loading = true;
+      try {
+        const older = await client.fetchHistory(currentRoomId, historyState.oldest);
+        if (older.length === 0) {
+          historyState.noMore = true;
+          console.log('  No older messages.');
+        } else {
+          if (older.length < 50) historyState.noMore = true;
+          historyState.oldest = older[0]!.createdAt;
+          console.log(`  ─── ${older.length} older message${older.length === 1 ? '' : 's'} ───\n`);
+          older.forEach((m) => {
+            const rendered = renderMessageContent(m.type, m.content);
+            console.log(`  [${formatDate(m.createdAt)}] ${m.senderUsername}: ${rendered}`);
+          });
+          console.log('');
+        }
+      } finally {
+        historyState.loading = false;
+      }
       return false;
     }
 
@@ -408,6 +472,30 @@ async function handleCommand(
       return false;
     }
 
+    case '/clearmessages': {
+      if (role !== 'admin') {
+        console.log('  Unknown command. Type help for commands.');
+        return false;
+      }
+      const roomName = args.join(' ').trim();
+      if (!roomName) {
+        console.log('  Usage: /clearmessages <room-name>');
+        return false;
+      }
+      const response = await fetch(`${cliConfig.serverUrl}/api/admin/rooms/${encodeURIComponent(roomName)}/messages`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const body = await parseJsonResponse<{ roomId: string; roomName: string; deletedCount: number }>(response);
+      console.log(`  Cleared ${body.deletedCount} message${body.deletedCount === 1 ? '' : 's'} from room "${body.roomName}".`);
+      if (currentRoomId === body.roomId) {
+        historyState.oldest = undefined;
+        historyState.noMore = true;
+        historyState.loading = false;
+      }
+      return false;
+    }
+
     case '/mute': {
       if (!currentRoomName) {
         console.log('  Join a room first.');
@@ -444,6 +532,7 @@ function printHelp(role: string): void {
   console.log('  rooms                           List all rooms');
   console.log('  create <name> [-p <password>]   Create a room');
   console.log('  join   <name> [-p <password>]   Join a room');
+  console.log('  more                            Load older messages in current room');
   console.log('  <message>                       Send a message (when in room)');
   console.log('  /upload <path>                  Upload and send an image file');
   console.log('  /paste-image                    Win+Shift+S then type this to send');
@@ -456,6 +545,7 @@ function printHelp(role: string): void {
     console.log('  /requestedregister              List pending registrations');
     console.log('  /approve <username or userId>   Approve a pending user');
     console.log('  /reject  <username or userId>   Reject a pending user');
+    console.log('  /clearmessages <room-name>      Delete all messages in a room');
   }
   console.log('  exit                            Quit');
   console.log('  ──────────────────────────────────────────────────────────');

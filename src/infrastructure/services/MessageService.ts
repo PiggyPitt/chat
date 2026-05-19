@@ -11,7 +11,11 @@ export class MessageService implements IMessageService {
     return this.messageRepository.create(message);
   }
 
-  async getHistory(roomId: string, limit = 50): Promise<Message[]> {
-    return this.messageRepository.listByRoom(roomId, limit);
+  async getHistory(roomId: string, limit = 50, before?: Date): Promise<Message[]> {
+    return this.messageRepository.listByRoom(roomId, limit, before);
+  }
+
+  async clearHistory(roomId: string): Promise<number> {
+    return this.messageRepository.deleteByRoom(roomId);
   }
 }

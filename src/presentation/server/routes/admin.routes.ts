@@ -8,5 +8,6 @@ export function createAdminRouter(controller: AdminController, auth: AuthMiddlew
   router.get('/pending', controller.listPending);
   router.post('/approve/:target', controller.approve);
   router.post('/reject/:target', controller.reject);
+  router.delete('/rooms/:name/messages', controller.clearRoomMessages);
   return router;
 }

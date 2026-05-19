@@ -3,6 +3,14 @@ import { cliConfig } from './cli-config';
 
 // ── Wire-format types ──────────────────────────────────────────────────────────
 
+export interface HistoryMessage {
+  id: string;
+  senderUsername: string;
+  type?: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface NewMessagePayload {
   message: {
     type?: string;
@@ -20,7 +28,8 @@ type ServerToClientEvents = {
 };
 
 type ClientToServerEvents = {
-  'join-room': (roomName: string, password: string | null, callback: (error: string | null, payload?: { roomId: string; messages: unknown[] }) => void) => void;
+  'join-room': (roomName: string, password: string | null, callback: (error: string | null, payload?: { roomId: string; messages: HistoryMessage[] }) => void) => void;
+  'get-history': (roomId: string, before: string, callback: (error: string | null, messages?: HistoryMessage[]) => void) => void;
   'leave-room': (roomName: string, callback: (error: string | null) => void) => void;
   'send-message': (roomId: string, content: string, callback: (error: string | null) => void) => void;
   'send-image': (roomId: string, imageUrl: string, callback: (error: string | null) => void) => void;
@@ -68,11 +77,20 @@ export class ChatSocketClient {
     this.socket?.on('user-left', handler);
   }
 
-  async joinRoom(roomName: string, password?: string): Promise<{ roomId: string; messages: unknown[] }> {
+  async joinRoom(roomName: string, password?: string): Promise<{ roomId: string; messages: HistoryMessage[] }> {
     return new Promise((resolve, reject) => {
       this.socket?.emit('join-room', roomName, password ?? null, (error, payload) => {
         if (error) { reject(new Error(error)); return; }
-        resolve(payload as { roomId: string; messages: unknown[] });
+        resolve(payload as { roomId: string; messages: HistoryMessage[] });
+      });
+    });
+  }
+
+  async fetchHistory(roomId: string, before: string): Promise<HistoryMessage[]> {
+    return new Promise((resolve, reject) => {
+      this.socket?.emit('get-history', roomId, before, (error, messages) => {
+        if (error) { reject(new Error(error)); return; }
+        resolve(messages ?? []);
       });
     });
   }

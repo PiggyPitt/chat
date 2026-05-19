@@ -61,6 +61,15 @@ export class SocketServer {
         }
       });
 
+      socket.on('get-history', async (roomId: string, before: string, callback: (error: string | null, messages?: unknown[]) => void) => {
+        try {
+          const history = await this.messageService.getHistory(roomId, 50, new Date(before));
+          callback(null, history);
+        } catch (error) {
+          callback((error as Error).message);
+        }
+      });
+
       socket.on('leave-room', async (roomName: string, callback: (error: string | null) => void) => {
         try {
           const room = await this.roomService.leaveRoom(roomName, userId);

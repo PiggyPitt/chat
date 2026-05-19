@@ -24,7 +24,7 @@ export function createApp(): express.Express {
   const roomController = new RoomController(container.listRoomsUseCase, container.createRoomUseCase, container.joinRoomUseCase, container.leaveRoomUseCase);
   const authMiddleware = new AuthMiddleware(container.authService);
   const uploadController = new UploadController(new UploadImageUseCase());
-  const adminController = new AdminController(container.listPendingUsersUseCase, container.approveUserUseCase, container.rejectUserUseCase);
+  const adminController = new AdminController(container.listPendingUsersUseCase, container.approveUserUseCase, container.rejectUserUseCase, container.clearRoomMessagesUseCase);
 
   app.disable('x-powered-by');
   app.use(helmet());
