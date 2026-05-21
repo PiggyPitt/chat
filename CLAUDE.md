@@ -2,11 +2,12 @@
 
 ## Project Overview
 
-Terminal-based real-time group chat. Users register (pending admin approval), log in, and chat inside named rooms via a CLI client. The server exposes REST + Socket.IO; the CLI client is distributed as a standalone binary.
+Real-time group chat with two clients: a terminal CLI and a Discord-style web frontend. Users register (pending admin approval), log in, and chat inside named rooms. The server exposes REST + Socket.IO; both clients connect to the same backend.
 
 - **Stack:** Node.js ≥22, TypeScript, Express, Socket.IO, MongoDB/Mongoose, JWT, bcrypt
+- **Frontend:** React 18 + TypeScript + Vite 5, Tailwind CSS (Discord dark theme), Zustand, socket.io-client
 - **Version file:** `src/version.ts` — bump here for releases
-- **Build output:** `dist/` (tsc), standalone CLI binary via `@yao-pkg/pkg`
+- **Build output:** `dist/` (tsc), standalone CLI binary via `@yao-pkg/pkg`, frontend SPA via Vite → `frontend/dist/`
 
 ## Architecture — Clean Architecture
 
@@ -103,6 +104,45 @@ Admin only:
 /reject  <username|userId>      Reject user
 ```
 
+## Web Frontend Architecture
+
+`frontend/` — standalone Vite package, proxies `/api`, `/socket.io`, `/uploads` → `:4000` in dev.
+
+```
+frontend/src/
+  api/           # Axios client (JWT interceptor + 401 redirect), auth/rooms/admin/upload
+  socket/        # socketClient.ts — module-level singleton, connect(token)/disconnect()
+  store/         # useAuthStore (persisted), useRoomStore, useChatStore, useUIStore
+  hooks/         # useSocket.ts, useRoom.ts, useMediaQuery.ts, useScrollToBottom.ts
+  pages/         # LoginPage, RegisterPage, PendingPage, ChatPage
+  components/
+    layout/      # AppShell.tsx (3-column responsive), LeftSidebar, RightSidebar
+    chat/        # ChatArea, ChatHeader, MessageList, MessageItem, MessageInput, LoadMoreButton
+    rooms/       # RoomList, RoomItem, CreateRoomModal
+    admin/       # AdminPanel (slide-in drawer), PendingUsersList, ClearRoomMessages
+    ui/          # Modal, Button, Input, Spinner, Toast, PasswordModal (GitHub 2FA style)
+  types/index.ts # User, Room, Message, AuthResponse, PendingUser interfaces
+```
+
+**Key frontend patterns:**
+- `useRoom.join()` must re-throw errors after `addToast` — PasswordModal relies on the throw for shake animation
+- `appendMessage` deduplicates by `id` — join-room callback + new-message can overlap
+- Sidebars: width-animate in flex flow on desktop (≥1024px left, ≥768px right), fixed overlay drawer on mobile
+- `useMediaQuery` hook drives responsive breakpoints reactively
+- `MongoRoomRepository.list()` must include `passwordHash` — omitting it makes all rooms appear passwordless
+
+**Auth flow:**
+- Register → `status: pending` → redirect `/pending` (no token issued)
+- Login approved → JWT stored in `useAuthStore` (persisted localStorage key `auth-storage`)
+- Login pending → server returns error → show inline message, no redirect
+- Admin → approve/reject from Admin Panel drawer
+
+**Dev (2 terminals):**
+```bash
+npm run dev:server              # Terminal 1 — backend on :4000
+npm --prefix frontend run dev   # Terminal 2 — Vite on :5173 (proxy → :4000)
+```
+
 ## CLI Architecture
 
 `src/presentation/cli/index.ts` — main entry, readline loop, command dispatcher  
@@ -163,16 +203,38 @@ Original `isInstalled()` compared `normalize(process.execPath)` against `install
 | EC-6 | User re-runs downloaded exe after install | Marker found → `isInstalled()` = true → skip install → app opens normally |
 | EC-7 | New version downloaded (upgrade path) | Marker found → skip bootstrap installer; `checkAndUpdate()` (updater.ts) handles version upgrades separately |
 
+## Docker
+
+```
+Dockerfile           # Multi-stage: builder (compile all) → runtime (alpine, minimal)
+docker-compose.yml   # Services: mongo, app-chat, cloudflared
+.dockerignore
+```
+
+- `NODE_ENV=production` → Express serves `frontend/dist/` as SPA (fallback `index.html`)
+- `UPLOAD_DIR=/app/uploads` mounted as named volume for persistence
+- `MONGO_URI` overridden in compose to `mongodb://mongo:27017/chat-app` (local MongoDB, not Atlas)
+- Cloudflare tunnel (`app-chat:4000`) — service name must match what's configured on Cloudflare dashboard
+
+```bash
+docker compose up -d --build    # Build image + start all services
+docker compose logs -f app-chat # Watch server logs
+docker compose down             # Stop everything
+```
+
 ## Dev Commands
 
 ```bash
-npm run dev:server     # Run server (tsx, hot-ish)
-npm run dev:cli        # Run CLI
-npm run build          # tsc → dist/
-npm run build:cli      # Compile CLI to standalone binary (pkg)
-npm test               # Jest with coverage
-npm run lint           # ESLint
-npm run format         # Prettier check
+npm run dev:server              # Run server (tsx, hot-ish)
+npm run dev:cli                 # Run CLI
+npm --prefix frontend run dev   # Run frontend dev server (Vite :5173)
+npm run build                   # tsc → dist/
+npm run build:cli               # Compile CLI to standalone binary (pkg)
+npm run build:frontend          # Vite build → frontend/dist/
+npm run build:all               # build + build:frontend
+npm test                        # Jest with coverage
+npm run lint                    # ESLint
+npm run format                  # Prettier check
 ```
 
 ## Conventions

@@ -1,6 +1,6 @@
 {
   "name": "terminal-realtime-chat",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "engines": {
     "node": ">=22.0.0"
@@ -14,7 +14,9 @@
     "lint": "eslint . --ext .ts",
     "format": "prettier --check .",
     "test": "jest --passWithNoTests --coverage",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:all": "npm run build && npm run build:frontend"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -30,6 +32,9 @@
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "uuid": "^9.0.0"
+  },
+  "pkg": {
+    "assets": ["src/assets/**/*"]
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.0",

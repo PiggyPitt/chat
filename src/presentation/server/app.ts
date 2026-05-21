@@ -50,6 +50,14 @@ export function createApp(): express.Express {
   app.use('/api/upload', createUploadRouter(uploadController, authMiddleware));
   app.use('/api/admin', createAdminRouter(adminController, authMiddleware));
 
+  if (config.env === 'production') {
+    const frontendDist = resolve(process.cwd(), 'frontend', 'dist');
+    app.use(express.static(frontendDist));
+    app.get('*', (_req, res) => {
+      res.sendFile(resolve(frontendDist, 'index.html'));
+    });
+  }
+
   app.use(errorMiddleware);
 
   return app;

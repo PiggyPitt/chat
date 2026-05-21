@@ -56,7 +56,16 @@ export class ManagementNotificationService {
   constructor(options: NotificationServiceOptions = {}) {
     this.activity = new ActivityDetector(options.inactivityMs ?? 30_000);
     this.config = new NotificationConfig();
-    this.audioPath = options.audioPath ?? path.join(process.cwd(), 'src', 'assets', 'notify.mp3');
+    this.audioPath = options.audioPath ?? ManagementNotificationService.resolveAudioPath();
+  }
+
+  private static resolveAudioPath(): string {
+    const isPackaged = typeof (process as unknown as { pkg?: unknown }).pkg !== 'undefined';
+    if (isPackaged && process.platform === 'win32') {
+      const localAppData = process.env['LOCALAPPDATA'];
+      if (localAppData) return path.join(localAppData, 'chat-cli', 'assets', 'notify.mp3');
+    }
+    return path.join(process.cwd(), 'src', 'assets', 'notify.mp3');
   }
 
   // ── Public interface ─────────────────────────────────────────────────────────

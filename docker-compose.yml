@@ -1,36 +1,33 @@
-version: '3.9'
 services:
-  app-chat:
-    build: .
-    ports:
-      - '4000:4000'
-    env_file:
-      - .env
-    environment:
-      - NODE_ENV=production
-      - MONGO_URI=mongodb://mongo:27017/chat-app
-    depends_on:
-      - mongo
-    restart: unless-stopped
-    volumes:
-      - uploads-data:/app/uploads
-
   mongo:
     image: mongo:7.0
     restart: unless-stopped
     volumes:
       - mongo-data:/data/db
 
+  app-chat:
+    build: .
+    ports:
+      - "4000:4000"
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      UPLOAD_DIR: /app/uploads
+      MONGO_URI: mongodb://mongo:27017/chat-app
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
   cloudflared:
     image: cloudflare/cloudflared:latest
-    container_name: chitchat-cloudflared
-    restart: always
+    restart: unless-stopped
     command: tunnel run
-    env_file:
-      - .env
+    env_file: .env
     depends_on:
       - app-chat
 
 volumes:
   mongo-data:
-  uploads-data:
+  uploads:

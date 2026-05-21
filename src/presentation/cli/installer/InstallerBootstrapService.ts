@@ -95,6 +95,7 @@ export class InstallerBootstrapService {
 
     this.createDirectories();
     this.copyExecutable();   // marker is written here, after a successful copy
+    this.copyAssets();
     this.addToUserPath();
     this.relaunch();
   }
@@ -144,6 +145,28 @@ export class InstallerBootstrapService {
 
     writeFileSync(this.markerPath, new Date().toISOString(), 'utf8');
     console.log(`  Installed: ${dest}`);
+  }
+
+  /**
+   * Copies bundled assets (e.g. notify.mp3) from the pkg snapshot to the
+   * install assets directory so external processes (PowerShell audio) can read them.
+   * Non-fatal — a missing asset just silences the sound.
+   */
+  private copyAssets(): void {
+    // pkg snapshot mirrors the real project path; assets/ is 4 dirs up from this file
+    // dist/presentation/cli/installer/ → ../../../../src/assets/
+    const snapshotAssets = join(__dirname, '..', '..', '..', '..', 'src', 'assets');
+    const destAssets = join(this.installDir, 'assets');
+    const files = ['notify.mp3'];
+    for (const file of files) {
+      const src = join(snapshotAssets, file);
+      const dest = join(destAssets, file);
+      try {
+        if (existsSync(src) && !existsSync(dest)) {
+          copyFileSync(src, dest);
+        }
+      } catch { /* non-fatal */ }
+    }
   }
 
   /**

@@ -15,7 +15,7 @@ export class MongoRoomRepository implements IRoomRepository {
 
   async list(): Promise<Room[]> {
     const docs = await RoomModel.find().sort({ createdAt: 1 }).lean().exec();
-    return docs.map((doc) => new Room({ id: doc._id.toString(), name: doc.name, createdBy: doc.createdBy, members: doc.members, createdAt: doc.createdAt }));
+    return docs.map((doc) => new Room({ id: doc._id.toString(), name: doc.name, createdBy: doc.createdBy, members: doc.members, createdAt: doc.createdAt, passwordHash: doc.passwordHash }));
   }
 
   async create(room: Room): Promise<Room> {
