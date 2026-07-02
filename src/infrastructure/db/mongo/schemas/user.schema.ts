@@ -5,7 +5,8 @@ export const UserSchema = new mongoose.Schema(
     username: { type: String, required: true, unique: true, trim: true },
     passwordHash: { type: String, required: true },
     status: { type: String, enum: ['pending', 'approved', 'rejected', 'banned'], default: 'pending' },
-    role: { type: String, enum: ['user', 'admin'], default: 'user' }
+    role: { type: String, enum: ['user', 'admin'], default: 'user' },
+    mutedRooms: { type: [String], default: [] }
   },
   { timestamps: true, collection: 'users' }
 );
@@ -15,6 +16,7 @@ export interface UserDocument extends mongoose.Document {
   passwordHash: string;
   status: 'pending' | 'approved' | 'rejected' | 'banned';
   role: 'user' | 'admin';
+  mutedRooms: string[];
   createdAt: Date;
   updatedAt: Date;
 }

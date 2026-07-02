@@ -20,5 +20,9 @@ export const config = {
   rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 10),
   serverUrl: process.env.SERVER_URL as string,
   socketPath: process.env.SOCKET_PATH ?? '/socket.io',
-  uploadDir: process.env.UPLOAD_DIR ?? './uploads'
+  uploadDir: process.env.UPLOAD_DIR ?? './uploads',
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? '',
+  vapidEmail: process.env.VAPID_EMAIL ?? 'mailto:admin@chat.app',
+  giphyApiKey: process.env.GIPHY_API_KEY ?? '',
 };

@@ -6,4 +6,6 @@ export interface IUserRepository {
   create(user: User): Promise<User>;
   updateStatus(id: string, status: UserStatus): Promise<User | null>;
   findByStatus(status: UserStatus): Promise<User[]>;
+  toggleMuteRoom(userId: string, roomId: string): Promise<{ mutedRooms: string[]; muted: boolean }>;
+  getMutedRooms(userId: string): Promise<string[]>;
 }

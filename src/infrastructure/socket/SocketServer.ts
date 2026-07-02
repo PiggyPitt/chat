@@ -3,6 +3,8 @@ import { Server, Socket } from 'socket.io';
 import { IAuthService } from '../../application/interfaces/services/IAuthService';
 import { IMessageService } from '../../application/interfaces/services/IMessageService';
 import { IRoomService } from '../../application/interfaces/services/IRoomService';
+import { IUserRepository } from '../../application/interfaces/repositories/IUserRepository';
+import { PushService } from '../services/PushService.js';
 import { Logger } from '../../shared/logger/logger.js';
 import { config } from '../../shared/config/index.js';
 
@@ -12,12 +14,21 @@ interface ClientPayload {
 
 export class SocketServer {
   private io: Server | null = null;
+  // roomUsers tracks which users have joined a room this server session (survives socket disconnect)
+  private readonly roomUsers = new Map<string, Set<string>>();
+  // verifiedRoomSessions tracks users who already passed the room password check this server
+  // session (keyed by room name, since it must be known before joinRoom resolves the room id).
+  // Used only to let a live socket reconnect skip re-entering the password — resets on server
+  // restart and never persists, unlike DB membership.
+  private readonly verifiedRoomSessions = new Map<string, Set<string>>();
 
   constructor(
     private readonly httpServer: HttpServer,
     private readonly authService: IAuthService,
     private readonly roomService: IRoomService,
-    private readonly messageService: IMessageService
+    private readonly messageService: IMessageService,
+    private readonly userRepository: IUserRepository,
+    private readonly pushService: PushService
   ) {}
 
   start(): Server {
@@ -51,8 +62,16 @@ export class SocketServer {
 
       socket.on('join-room', async (roomName: string, password: string | null, callback: (error: string | null, payload?: { roomId: string; messages: unknown[] }) => void) => {
         try {
-          const room = await this.roomService.joinRoom(roomName, userId, password ?? undefined);
+          const alreadyVerified = this.verifiedRoomSessions.get(roomName)?.has(userId) ?? false;
+          const room = await this.roomService.joinRoom(roomName, userId, password ?? undefined, alreadyVerified);
           socket.join(room.id);
+
+          if (!this.verifiedRoomSessions.has(roomName)) this.verifiedRoomSessions.set(roomName, new Set());
+          this.verifiedRoomSessions.get(roomName)!.add(userId);
+
+          if (!this.roomUsers.has(room.id)) this.roomUsers.set(room.id, new Set());
+          this.roomUsers.get(room.id)!.add(userId);
+
           const history = await this.messageService.getHistory(room.id);
           callback(null, { roomId: room.id, messages: history });
           socket.to(room.id).emit('user-joined', { userId, username, roomId: room.id });
@@ -76,6 +95,9 @@ export class SocketServer {
           // emit BEFORE leave — socket.to() targets only remaining room members
           socket.to(room.id).emit('user-left', { userId, username, roomId: room.id });
           socket.leave(room.id);
+          // explicit leave — remove from push tracking so they stop receiving push for this room
+          this.roomUsers.get(room.id)?.delete(userId);
+          this.verifiedRoomSessions.get(roomName)?.delete(userId);
           callback(null);
         } catch (error) {
           callback((error as Error).message);
@@ -87,17 +109,18 @@ export class SocketServer {
           const message = await this.messageService.sendMessage(roomId, userId, username, content);
           this.io?.to(roomId).emit('new-message', { message, senderId: userId, senderUsername: username });
           callback(null);
+          this.notifyOfflineUsers(roomId, userId, username, content).catch(() => {});
         } catch (error) {
           callback((error as Error).message);
         }
       });
-
 
       socket.on('send-image', async (roomId: string, imageUrl: string, callback: (error: string | null) => void) => {
         try {
           const message = await this.messageService.sendMessage(roomId, userId, username, imageUrl, 'image');
           this.io?.to(roomId).emit('new-message', { message, senderId: userId, senderUsername: username });
           callback(null);
+          this.notifyOfflineUsers(roomId, userId, username, '📷 Image').catch(() => {});
         } catch (error) {
           callback((error as Error).message);
         }
@@ -116,8 +139,9 @@ export class SocketServer {
       // disconnecting fires before Socket.IO removes the socket from rooms
       socket.on('disconnecting', () => {
         for (const roomId of socket.rooms) {
-          if (roomId === socket.id) continue; // skip the socket's own default room
+          if (roomId === socket.id) continue;
           socket.to(roomId).emit('user-left', { userId, username, roomId });
+          // intentionally keep roomUsers entry — user backgrounded the app, still wants push
         }
       });
 
@@ -127,5 +151,33 @@ export class SocketServer {
     });
 
     return this.io;
+  }
+
+  private async notifyOfflineUsers(roomId: string, senderId: string, senderUsername: string, preview: string): Promise<void> {
+    if (!this.io) return;
+
+    const connectedSockets = await this.io.in(roomId).fetchSockets();
+    const onlineUserIds = new Set(connectedSockets.map((s) => s.data.userId as string));
+
+    const candidates = this.roomUsers.get(roomId);
+    if (!candidates) return;
+
+    const offlineUserIds = [...candidates].filter((uid) => uid !== senderId && !onlineUserIds.has(uid));
+    if (offlineUserIds.length === 0) return;
+
+    const mutedChecks = await Promise.all(
+      offlineUserIds.map(async (uid) => {
+        const mutedRooms = await this.userRepository.getMutedRooms(uid);
+        return mutedRooms.includes(roomId) ? null : uid;
+      })
+    );
+    const targetUserIds = mutedChecks.filter((uid): uid is string => uid !== null);
+    if (targetUserIds.length === 0) return;
+
+    const rooms = await this.roomService.listRooms();
+    const roomName = rooms.find((r) => r.id === roomId)?.name ?? roomId;
+
+    const body = `${senderUsername}: ${preview.length > 80 ? preview.slice(0, 80) + '…' : preview}`;
+    await this.pushService.sendToUsers(targetUserIds, { title: `#${roomName}`, body, roomId, roomName });
   }
 }

@@ -38,3 +38,11 @@ export interface PendingUser {
   username: string
   createdAt: string
 }
+
+export interface GifResult {
+  id: string
+  url: string
+  previewUrl: string
+  width: number
+  height: number
+}

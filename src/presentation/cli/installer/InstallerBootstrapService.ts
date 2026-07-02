@@ -67,7 +67,12 @@ export class InstallerBootstrapService {
     }
 
     const service = new InstallerBootstrapService(LOCALAPPDATA, APPDATA);
-    if (service.isInstalled()) return;           // already running from install dir
+    if (service.isInstalled()) {
+      // Backfill assets added after this machine's original install (e.g. notify.mp3
+      // shipped in a later release) — copyAssets() only ran during install() before.
+      service.copyAssets();
+      return;
+    }
 
     service.install();
     // install() calls relaunch() which exits — this line is unreachable
@@ -157,6 +162,9 @@ export class InstallerBootstrapService {
     // dist/presentation/cli/installer/ → ../../../../src/assets/
     const snapshotAssets = join(__dirname, '..', '..', '..', '..', 'src', 'assets');
     const destAssets = join(this.installDir, 'assets');
+    if (!existsSync(destAssets)) {
+      mkdirSync(destAssets, { recursive: true });
+    }
     const files = ['notify.mp3'];
     for (const file of files) {
       const src = join(snapshotAssets, file);

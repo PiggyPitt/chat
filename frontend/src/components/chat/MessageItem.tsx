@@ -6,6 +6,12 @@ interface Props {
   group: MessageGroup
 }
 
+const EMOJI_ONLY_RE = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+$/u
+
+function isEmojiOnly(text: string): boolean {
+  return text.trim().length > 0 && EMOJI_ONLY_RE.test(text.trim())
+}
+
 export default function MessageItem({ group }: Props) {
   const initial = group.senderUsername[0]?.toUpperCase() ?? '?'
   const firstMsg = group.messages[0]
@@ -24,7 +30,14 @@ export default function MessageItem({ group }: Props) {
           msg.type === 'image' ? (
             <ImagePreview key={msg.id} url={msg.content} />
           ) : (
-            <p key={msg.id} className="text-sm text-dc-text break-words leading-relaxed">
+            <p
+              key={msg.id}
+              className={
+                isEmojiOnly(msg.content)
+                  ? 'text-4xl leading-snug'
+                  : 'text-sm text-dc-text break-words leading-relaxed'
+              }
+            >
               {msg.content}
             </p>
           )

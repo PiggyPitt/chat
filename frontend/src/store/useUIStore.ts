@@ -14,6 +14,7 @@ interface UIState {
   sidebarOpen: boolean
   rightSidebarOpen: boolean
   toasts: Toast[]
+  socketConnected: boolean
   setShowCreateRoom: (v: boolean) => void
   setShowAdminPanel: (v: boolean) => void
   openPasswordModal: (roomName: string) => void
@@ -24,6 +25,7 @@ interface UIState {
   toggleRightSidebar: () => void
   addToast: (message: string, type: 'error' | 'success') => void
   removeToast: (id: string) => void
+  setSocketConnected: (v: boolean) => void
 }
 
 export const useUIStore = create<UIState>()((set) => ({
@@ -34,6 +36,7 @@ export const useUIStore = create<UIState>()((set) => ({
   sidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 1024 : true,
   rightSidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
   toasts: [],
+  socketConnected: true,
   setShowCreateRoom: (v) => set({ showCreateRoom: v }),
   setShowAdminPanel: (v) => set({ showAdminPanel: v }),
   openPasswordModal: (roomName) => set({ showPasswordModal: true, pendingJoinRoomName: roomName }),
@@ -45,4 +48,5 @@ export const useUIStore = create<UIState>()((set) => ({
   addToast: (message, type) =>
     set((s) => ({ toasts: [...s.toasts, { id: crypto.randomUUID(), message, type }] })),
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  setSocketConnected: (v) => set({ socketConnected: v }),
 }))

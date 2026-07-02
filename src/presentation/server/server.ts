@@ -12,7 +12,7 @@ async function bootstrap(): Promise<void> {
     const app = createApp();
     const httpServer = http.createServer(app);
     const container = new Container();
-    new SocketServer(httpServer, container.authService, container.roomService, container.messageService).start();
+    new SocketServer(httpServer, container.authService, container.roomService, container.messageService, container.userRepository, container.pushService).start();
 
     httpServer.listen(config.port, () => {
       Logger.info(`Server listening on port ${config.port}`);

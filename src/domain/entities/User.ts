@@ -8,6 +8,7 @@ export class User {
   public readonly createdAt: Date;
   public readonly status: UserStatus;
   public readonly role: UserRole;
+  public readonly mutedRooms: string[];
 
   constructor(params: {
     id: string;
@@ -16,6 +17,7 @@ export class User {
     createdAt?: Date;
     status?: UserStatus;
     role?: UserRole;
+    mutedRooms?: string[];
   }) {
     this.id = params.id;
     this.username = params.username;
@@ -23,5 +25,6 @@ export class User {
     this.createdAt = params.createdAt ?? new Date();
     this.status = params.status ?? 'pending';
     this.role = params.role ?? 'user';
+    this.mutedRooms = params.mutedRooms ?? [];
   }
 }
