@@ -41,9 +41,18 @@ function printAbovePrompt(text: string, rl: readline.Interface): void {
   }
 }
 
+// Uploaded images are stored as origin-relative paths (e.g. `/uploads/xxx.png`) so the
+// web client stays same-origin under CSP regardless of which public domain served it.
+// The CLI has no page origin of its own, so it resolves against the server it's connected
+// to. GIF picker messages are already absolute (Giphy CDN URLs) and pass through unchanged.
+function resolveImageUrl(content: string): string {
+  return /^https?:\/\//i.test(content) ? content : `${cliConfig.serverUrl}${content}`;
+}
+
 function renderMessageContent(type: string | undefined, content: string): string {
   if (type === 'image') {
-    return `${AnsiHyperlink.imageLink(content)}  ${AnsiHyperlink.downloadLink(content)}`;
+    const url = resolveImageUrl(content);
+    return `${AnsiHyperlink.imageLink(url)}  ${AnsiHyperlink.downloadLink(url)}`;
   }
   return AnsiHyperlink.autoLink(content);
 }

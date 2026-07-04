@@ -47,6 +47,11 @@ export class UploadImageUseCase {
     await mkdir(this.uploadDir, { recursive: true });
     await writeFile(filePath, input.buffer);
 
-    return { filename, publicUrl: `${config.serverUrl}/uploads/${filename}` };
+    // Origin-relative — the app may be reachable via multiple public domains
+    // (e.g. several Cloudflare Tunnel hostnames pointing at the same container),
+    // and an absolute URL baked to one of them would violate the browser's
+    // same-origin img-src CSP when viewed from another. The CLI resolves this
+    // path against its own configured server URL before rendering a hyperlink.
+    return { filename, publicUrl: `/uploads/${filename}` };
   }
 }
