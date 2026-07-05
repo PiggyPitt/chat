@@ -14,6 +14,17 @@ describe('ActivityDetector', () => {
     jest.useRealTimers();
   });
 
+  it('marks activity when stdin emits data', () => {
+    const detector = new ActivityDetector(1000);
+    jest.advanceTimersByTime(900);
+
+    const dataHandler = stdinSpy.mock.calls.find(([event]) => event === 'data')?.[1] as () => void;
+    dataHandler();
+
+    jest.advanceTimersByTime(500);
+    expect(detector.isActive()).toBe(true);
+  });
+
   describe('isActive', () => {
     it('returns true immediately after construction', () => {
       const detector = new ActivityDetector(1000);

@@ -166,26 +166,43 @@ src/
 
 ### Scripts
 ```bash
-npm run build        # Compile TypeScript
-npm run dev:server   # Start development server
-npm run dev:cli      # Start CLI client
-npm run lint         # Run ESLint
-npm run format       # Format with Prettier
-npm run test         # Run tests with coverage
-npm run test:watch   # Watch mode testing
+npm run build          # Compile TypeScript
+npm run dev:server     # Start development server
+npm run dev:cli        # Start CLI client
+npm run lint           # Run ESLint
+npm run format         # Format with Prettier
+npm run test           # Run backend tests (Jest) with coverage
+npm run test:watch     # Watch mode testing (backend)
+npm run test:frontend  # Run frontend tests (Vitest)
+npm run test:coverage  # Run backend + frontend suites unconditionally (runs both even
+                        # if one fails; exits non-zero if either did)
 ```
 
 ### Testing
+
+Backend (Node/CLI) and frontend (React) each have their own test runner.
+
+**Backend — Jest**
 ```bash
-# Run all tests
-npm test
-
-# Run with coverage report
-npm run test
-
-# Watch mode
-npm run test:watch
+npm test              # run all backend tests with coverage
+npm run test:watch    # watch mode
 ```
+Backend tests live in `tests/unit/` and `tests/integration/`. Notable unit suites:
+- `upload-image.usecase.spec.ts` — `UploadImageUseCase` mime/size validation and the
+  origin-relative `publicUrl` contract (must never bake in `SERVER_URL`, since the app can
+  be reached via multiple public domains/tunnels pointing at the same server)
+- `message-render.spec.ts` — CLI `resolveImageUrl`/`renderMessageContent` (`src/presentation/cli/message-render.ts`),
+  covering relative-path resolution against the CLI's configured server URL and pass-through
+  of already-absolute GIF-picker URLs
+
+**Frontend — Vitest + Testing Library**
+```bash
+npm run test:frontend            # run once (or: npm --prefix frontend run test)
+npm --prefix frontend exec vitest   # watch mode
+```
+Frontend tests live alongside the source files as `*.test.ts(x)` (e.g.
+`frontend/src/api/upload.test.ts`, `frontend/src/components/chat/ImagePreview.test.tsx`),
+configured via `frontend/vitest.config.ts` with a jsdom environment.
 
 ### Docker Deployment
 ```bash
@@ -239,16 +256,18 @@ SOCKET_PATH=/socket.io
 
 ## Testing Strategy
 
-### Coverage Goals
+### Coverage Goals (backend, enforced via Jest `coverageThreshold`)
 - **Statements**: 80%+
 - **Branches**: 80%+
 - **Functions**: 80%+
 - **Lines**: 80%+
 
 ### Test Types
-- **Unit tests**: Business logic, services, repositories
-- **Integration tests**: HTTP API, Socket.IO events
+- **Unit tests (Jest)**: Business logic, services, use cases, repositories, CLI rendering helpers
+- **Integration tests (Jest + Supertest)**: HTTP API, Socket.IO events
 - **Repository tests**: Database operations with MongoDB Memory Server
+- **Component/unit tests (Vitest + React Testing Library)**: Frontend API client behavior
+  and React components (e.g. image upload request shape, image-load-failure UI)
 
 ## Performance
 

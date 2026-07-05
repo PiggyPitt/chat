@@ -63,6 +63,33 @@ describe('AuthService', () => {
     await expect(authService.login('mike', 'wrong')).rejects.toThrow(HttpError);
   });
 
+  it('throws invalid credentials when the username does not exist', async () => {
+    userRepository.findByUsername.mockResolvedValue(null);
+
+    await expect(authService.login('ghost', 'password')).rejects.toThrow(HttpError);
+  });
+
+  it('rejects login for a pending account', async () => {
+    userRepository.findByUsername.mockResolvedValue({ ...validUser, status: 'pending' });
+    hashingService.verify.mockResolvedValue(true);
+
+    await expect(authService.login('mike', 'password')).rejects.toThrow(HttpError);
+  });
+
+  it('rejects login for a rejected account', async () => {
+    userRepository.findByUsername.mockResolvedValue({ ...validUser, status: 'rejected' });
+    hashingService.verify.mockResolvedValue(true);
+
+    await expect(authService.login('mike', 'password')).rejects.toThrow(HttpError);
+  });
+
+  it('rejects login for a banned account', async () => {
+    userRepository.findByUsername.mockResolvedValue({ ...validUser, status: 'banned' });
+    hashingService.verify.mockResolvedValue(true);
+
+    await expect(authService.login('mike', 'password')).rejects.toThrow(HttpError);
+  });
+
   it('verifies token and session', async () => {
     jwtService.verify.mockReturnValue({ userId: 'u1', username: 'mike' });
     sessionRepository.findByToken.mockResolvedValue('u1');

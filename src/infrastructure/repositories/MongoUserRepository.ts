@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { User, UserStatus } from '../../domain/entities/User';
 import { IUserRepository } from '../../application/interfaces/repositories/IUserRepository';
 import { UserModel, UserDocument } from '../db/mongo/schemas/user.schema.js';
@@ -16,6 +17,10 @@ function toUser(doc: UserDocument & { _id: { toString(): string } }): User {
 
 export class MongoUserRepository implements IUserRepository {
   async findById(id: string): Promise<User | null> {
+    // A non-ObjectId string (e.g. a mistyped username passed to the admin approve/reject
+    // fallback lookup) makes Mongoose throw a CastError instead of just missing — treat it
+    // as "not found" rather than letting it surface as a 500.
+    if (!mongoose.isValidObjectId(id)) return null;
     const doc = await UserModel.findById(id).lean<UserDocument>().exec();
     return doc ? toUser(doc as UserDocument & { _id: { toString(): string } }) : null;
   }

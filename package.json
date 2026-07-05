@@ -1,6 +1,6 @@
 {
   "name": "terminal-realtime-chat",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "private": true,
   "engines": {
     "node": ">=22.0.0"
@@ -16,7 +16,9 @@
     "test": "jest --passWithNoTests --coverage",
     "test:watch": "jest --watch",
     "build:frontend": "npm --prefix frontend run build",
-    "build:all": "npm run build && npm run build:frontend"
+    "build:all": "npm run build && npm run build:frontend",
+    "test:frontend": "npm --prefix frontend run test",
+    "test:coverage": "node scripts/test-all.mjs"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
