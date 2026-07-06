@@ -1,5 +1,6 @@
 import type { MessageGroup } from '@/utils/groupMessages'
 import { formatDate } from '@/utils/formatDate'
+import { linkify } from '@/utils/linkify'
 import ImagePreview from './ImagePreview'
 
 interface Props {
@@ -38,7 +39,7 @@ export default function MessageItem({ group }: Props) {
                   : 'text-sm text-dc-text break-words leading-relaxed'
               }
             >
-              {msg.content}
+              {isEmojiOnly(msg.content) ? msg.content : linkify(msg.content)}
             </p>
           )
         )}
