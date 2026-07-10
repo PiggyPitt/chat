@@ -42,10 +42,10 @@ describe('LeaveRoomUseCase', () => {
 });
 
 describe('JoinRoomUseCase', () => {
-  it('delegates to roomService.joinRoom with password and skip-check flag', async () => {
+  it('delegates to roomService.joinRoom with password', async () => {
     const roomService = { joinRoom: jest.fn().mockResolvedValue({ id: 'r1' }) };
-    const result = await new JoinRoomUseCase(roomService as any).execute('General', 'u1', 'pw', true);
-    expect(roomService.joinRoom).toHaveBeenCalledWith('General', 'u1', 'pw', true);
+    const result = await new JoinRoomUseCase(roomService as any).execute('General', 'u1', 'pw');
+    expect(roomService.joinRoom).toHaveBeenCalledWith('General', 'u1', 'pw');
     expect(result).toEqual({ id: 'r1' });
   });
 });

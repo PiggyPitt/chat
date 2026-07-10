@@ -92,13 +92,12 @@ describe('RoomService', () => {
     await expect(roomService.joinRoom('Ghost', 'u1')).rejects.toThrow(HttpError);
   });
 
-  it('lets an already-verified reconnect skip the password check', async () => {
+  it('requires the password again even for an existing member', async () => {
     const room = new Room({ id: 'r1', name: 'General', createdBy: 'owner', members: ['u1'], passwordHash: 'hash' });
     roomRepository.findByName.mockResolvedValue(room);
+    hashingService.verify.mockResolvedValue(false);
 
-    const result = await roomService.joinRoom('General', 'u1', undefined, true);
-
-    expect(result).toBe(room);
+    await expect(roomService.joinRoom('General', 'u1', 'wrong')).rejects.toThrow(HttpError);
     expect(roomRepository.addMember).not.toHaveBeenCalled();
   });
 

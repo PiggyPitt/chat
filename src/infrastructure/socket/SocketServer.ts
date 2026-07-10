@@ -16,11 +16,6 @@ export class SocketServer {
   private io: Server | null = null;
   // roomUsers tracks which users have joined a room this server session (survives socket disconnect)
   private readonly roomUsers = new Map<string, Set<string>>();
-  // verifiedRoomSessions tracks users who already passed the room password check this server
-  // session (keyed by room name, since it must be known before joinRoom resolves the room id).
-  // Used only to let a live socket reconnect skip re-entering the password — resets on server
-  // restart and never persists, unlike DB membership.
-  private readonly verifiedRoomSessions = new Map<string, Set<string>>();
 
   constructor(
     private readonly httpServer: HttpServer,
@@ -62,12 +57,8 @@ export class SocketServer {
 
       socket.on('join-room', async (roomName: string, password: string | null, callback: (error: string | null, payload?: { roomId: string; messages: unknown[] }) => void) => {
         try {
-          const alreadyVerified = this.verifiedRoomSessions.get(roomName)?.has(userId) ?? false;
-          const room = await this.roomService.joinRoom(roomName, userId, password ?? undefined, alreadyVerified);
+          const room = await this.roomService.joinRoom(roomName, userId, password ?? undefined);
           socket.join(room.id);
-
-          if (!this.verifiedRoomSessions.has(roomName)) this.verifiedRoomSessions.set(roomName, new Set());
-          this.verifiedRoomSessions.get(roomName)!.add(userId);
 
           if (!this.roomUsers.has(room.id)) this.roomUsers.set(room.id, new Set());
           this.roomUsers.get(room.id)!.add(userId);
@@ -97,7 +88,6 @@ export class SocketServer {
           socket.leave(room.id);
           // explicit leave — remove from push tracking so they stop receiving push for this room
           this.roomUsers.get(room.id)?.delete(userId);
-          this.verifiedRoomSessions.get(roomName)?.delete(userId);
           callback(null);
         } catch (error) {
           callback((error as Error).message);

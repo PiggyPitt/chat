@@ -120,6 +120,16 @@ describe('Socket integration', () => {
     socket.disconnect();
   });
 
+  it('rejects a wrong password on a later join, even after a prior correct join by the same user', async () => {
+    const first = await connectSocket(mikeToken);
+    await emitAsync(first, 'join-room', 'Secret', 'letmein');
+    first.disconnect();
+
+    const second = await connectSocket(mikeToken);
+    await expect(emitAsync(second, 'join-room', 'Secret', 'wrong')).rejects.toThrow();
+    second.disconnect();
+  });
+
   describe('within a shared room', () => {
     let mikeSocket: Socket;
     let annaSocket: Socket;

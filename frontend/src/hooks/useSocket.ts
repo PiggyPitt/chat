@@ -16,16 +16,17 @@ export function useSocket() {
   const setHasMoreHistory = useChatStore((s) => s.setHasMoreHistory)
   const activeRoomId     = useRoomStore((s) => s.activeRoomId)
   const activeRoomName   = useRoomStore((s) => s.activeRoomName)
+  const activeRoomPassword = useRoomStore((s) => s.activeRoomPassword)
   const setSocketConnected = useUIStore((s) => s.setSocketConnected)
 
   // Refs so the connect handler always sees the latest room without re-registering
   const hasConnectedRef = useRef(false)
-  const activeRoomRef   = useRef<{ id: string; name: string } | null>(null)
+  const activeRoomRef   = useRef<{ id: string; name: string; password: string | null } | null>(null)
 
   useEffect(() => {
     activeRoomRef.current =
-      activeRoomId && activeRoomName ? { id: activeRoomId, name: activeRoomName } : null
-  }, [activeRoomId, activeRoomName])
+      activeRoomId && activeRoomName ? { id: activeRoomId, name: activeRoomName, password: activeRoomPassword } : null
+  }, [activeRoomId, activeRoomName, activeRoomPassword])
 
   useEffect(() => {
     if (!token) return
@@ -36,11 +37,11 @@ export function useSocket() {
     const onConnect = async () => {
       setSocketConnected(true)
       if (hasConnectedRef.current && activeRoomRef.current) {
-        // Reconnected after mobile suspend / network drop — re-join to restore server membership
-        // Server skips password re-check only if this socket session already verified it, so no
-        // password needed here
+        // Reconnected after mobile suspend / network drop — re-join to restore server membership.
+        // Server always re-verifies the password; we resend the one already validated for this
+        // room, held only in this tab's memory (never persisted), so the user isn't re-prompted.
         try {
-          const { roomId, messages } = await joinRoom(activeRoomRef.current.name)
+          const { roomId, messages } = await joinRoom(activeRoomRef.current.name, activeRoomRef.current.password ?? undefined)
           setMessages(roomId, messages)
           setHasMoreHistory(roomId, messages.length >= 50)
           const users = await listUsers(roomId)

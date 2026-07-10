@@ -25,17 +25,10 @@ export class RoomService implements IRoomService {
     return this.roomRepository.create(room);
   }
 
-  async joinRoom(roomName: string, userId: string, password?: string, skipPasswordCheck = false): Promise<Room> {
+  async joinRoom(roomName: string, userId: string, password?: string): Promise<Room> {
     const room = await this.roomRepository.findByName(roomName);
     if (!room) {
       throw new HttpError('Room does not exist', 404);
-    }
-
-    // skipPasswordCheck is only set by the socket server for a live reconnect it already
-    // verified this server session — persistent DB membership alone must never bypass the password,
-    // otherwise anyone who joined once can rejoin forever with any (or no) password.
-    if (skipPasswordCheck && room.members.includes(userId)) {
-      return room;
     }
 
     if (room.hasPassword) {

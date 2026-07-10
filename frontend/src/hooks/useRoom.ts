@@ -16,7 +16,7 @@ export function useRoom() {
       const { roomId, messages } = await joinRoom(roomName, password)
       setMessages(roomId, messages)
       setHasMoreHistory(roomId, messages.length >= 50)
-      setActiveRoom(roomId, roomName)
+      setActiveRoom(roomId, roomName, password)
       const users = await listUsers(roomId)
       setOnlineUsers(roomId, users)
     } catch (err: unknown) {
