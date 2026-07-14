@@ -1,4 +1,4 @@
 export const cliConfig = {
-  serverUrl: 'https://chat.piggypitt.work',
+  serverUrl: 'https://74887569.cattery.cc',
   socketPath: '/socket.io',
 };
