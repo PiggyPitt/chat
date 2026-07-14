@@ -207,18 +207,19 @@ Original `isInstalled()` compared `normalize(process.execPath)` against `install
 
 ```
 Dockerfile           # Multi-stage: builder (compile all) → runtime (alpine, minimal)
-docker-compose.yml   # Services: mongo, app-chat, cloudflared
+docker-compose.yml   # Services: db (mongo), engine (app), tunnel (cloudflared)
 .dockerignore
 ```
 
 - `NODE_ENV=production` → Express serves `frontend/dist/` as SPA (fallback `index.html`)
-- `UPLOAD_DIR=/app/uploads` mounted as named volume for persistence
-- `MONGO_URI` overridden in compose to `mongodb://mongo:27017/chat-app` (local MongoDB, not Atlas)
-- Cloudflare tunnel (`app-chat:4000`) — service name must match what's configured on Cloudflare dashboard
+- `UPLOAD_DIR=/app/uploads` mounted as named volume (`market-uploads`) for persistence
+- `MONGO_URI` overridden in compose to `mongodb://db:27017/trading-app` (local MongoDB, not Atlas)
+- Cloudflare tunnel (`engine:4000`) — service name must match what's configured on Cloudflare dashboard
+- Service/volume names (`db`, `engine`, `tunnel`, `engine-data`, `market-uploads`, db name `trading-app`) are intentionally generic/decoy naming — do not rename back to `mongo`/`app-chat`/`cloudflared`/`chat-app` without also updating the Cloudflare tunnel's public hostname target
 
 ```bash
 docker compose up -d --build    # Build image + start all services
-docker compose logs -f app-chat # Watch server logs
+docker compose logs -f engine   # Watch server logs
 docker compose down             # Stop everything
 ```
 

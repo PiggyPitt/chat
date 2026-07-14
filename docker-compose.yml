@@ -1,11 +1,13 @@
+name: trading-engine
+
 services:
-  mongo:
+  db:
     image: mongo:7.0
     restart: unless-stopped
     volumes:
-      - mongo-data:/data/db
+      - engine-data:/data/db
 
-  app-chat:
+  engine:
     build: .
     ports:
       - "4000:4000"
@@ -13,23 +15,27 @@ services:
     environment:
       NODE_ENV: production
       UPLOAD_DIR: /app/uploads
-      MONGO_URI: mongodb://mongo:27017/chat-app
+      MONGO_URI: mongodb://db:27017/trading-app
     volumes:
-      - uploads:/app/uploads
+      - market-uploads:/app/uploads
     depends_on:
-      - mongo
+      - db
     restart: unless-stopped
+    networks:
+      default:
+        aliases:
+          - app-chat # TEMP: remove once Cloudflare tunnel's Public Hostname target is updated to "engine"
 
-
-
-  cloudflared:
+  tunnel:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel run
     env_file: .env
     depends_on:
-      - app-chat
+      - engine
 
 volumes:
-  mongo-data:
-  uploads:
+  engine-data:
+    name: engine-data
+  market-uploads:
+    name: market-uploads
